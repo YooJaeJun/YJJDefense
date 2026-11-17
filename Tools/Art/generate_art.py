@@ -775,147 +775,225 @@ def make_icon(kind):
 
 
 # ---------------------------------------------------------------------------------------------
+# 몬스터 2: 해변
+
+CRAB = rgba("ff7a5c")
+CRAB_DARK = rgba("e0553a")
+SNOW = rgba("f7fbff")
+ICE_BLUE = rgba("bfe6ff")
+
+
+def draw_crab(a, cx, cy, s, frame, king=False):
+    """옆으로 넓적한 꽃게. king이면 왕관과 콧수염."""
+    bob = 0 if frame == 0 else -3 * s
+    # 다리 셋씩
+    for side in (-1, 1):
+        for index in range(3):
+            x0 = cx + side * (18 + index * 13) * s
+            swing = (5 if (frame + index) % 2 == 0 else -5) * s
+            a.line([(x0, cy + 10 * s + bob), (x0 + side * 14 * s + swing, cy + 34 * s)], lw=5 * s)
+    # 집게 팔
+    lift = (0 if frame == 0 else -10) * s
+    for side in (-1, 1):
+        ax, ay = cx + side * 40 * s, cy - 4 * s + bob
+        hx, hy = cx + side * 58 * s, cy - 34 * s + bob + lift
+        a.line([(ax, ay), (hx, hy + 10 * s)], lw=6 * s)
+        a.blob(hx, hy, 15 * s, 12 * s, angle=side * 20, fill=CRAB, lw=5 * s)
+        a.poly([(hx - 4 * s * side, hy - 2 * s), (hx + 2 * s * side, hy - 16 * s), (hx + 12 * s * side, hy - 8 * s)], fill=CRAB, lw=4 * s)
+    # 눈자루 + 몸
+    for side in (-1, 1):
+        a.line([(cx + side * 12 * s, cy - 14 * s + bob), (cx + side * 14 * s, cy - 36 * s + bob)], lw=5 * s)
+    a.ellipse(cx, cy + bob, 46 * s, 28 * s, fill=CRAB, lw=6 * s if s > 1 else None)
+    a.arc(cx - 14 * s, cy - 8 * s + bob, 18 * s, 10 * s, 200, 290, color=rgba("ffb3a1"), lw=4 * s)
+    for side in (-1, 1):
+        a.ellipse(cx + side * 14 * s, cy - 40 * s + bob, 9 * s, 9 * s, fill=WHITE, lw=4 * s)
+        a.dot(cx + side * 14 * s + 2 * s, cy - 39 * s + bob, 3.6 * s)
+    if king:
+        a.poly([(cx - 26 * s, cy - 22 * s + bob), (cx - 30 * s, cy - 52 * s + bob), (cx - 14 * s, cy - 38 * s + bob), (cx, cy - 60 * s + bob),
+                (cx + 14 * s, cy - 38 * s + bob), (cx + 30 * s, cy - 52 * s + bob), (cx + 26 * s, cy - 22 * s + bob)], fill=YELLOW, lw=5 * s)
+        for x in (-14, 0, 14):
+            a.dot(cx + x * s, cy - 30 * s + bob, 4 * s, RED)
+        # 콧수염 + 화난 입
+        for side in (-1, 1):
+            a.blob(cx + side * 13 * s, cy + 6 * s + bob, 13 * s, 5 * s, angle=side * -12, fill=INK, outline=None)
+        a.line([(cx - 8 * s, cy + 16 * s + bob), (cx + 8 * s, cy + 16 * s + bob)], lw=4 * s)
+    else:
+        # 군모 쓴 병장
+        a.line([(cx - 10 * s, cy + 6 * s + bob), (cx + 10 * s, cy + 8 * s + bob)], lw=4 * s)
+        a.line([(cx - 16 * s, cy - 8 * s + bob), (cx - 4 * s, cy - 4 * s + bob)], lw=3.5 * s)
+        a.line([(cx + 16 * s, cy - 8 * s + bob), (cx + 4 * s, cy - 4 * s + bob)], lw=3.5 * s)
+
+
+def make_crab(frame):
+    a = Art(170, 140)
+    draw_crab(a, 85, 82, 1.0, frame)
+    return a.result()
+
+
+def make_king_crab(frame):
+    a = Art(300, 264)
+    draw_crab(a, 150, 160, 1.85, frame, king=True)
+    return a.result()
+
+
+def make_jellyfish(frame):
+    a = Art(120, 150)
+    phase = 0.0 if frame == 0 else math.pi
+    for index in range(4):
+        x = 30 + index * 20
+        pts = [(x + 6 * math.sin(phase + t * 0.25 + index), 64 + t * 7) for t in range(10)]
+        a.line(pts, color=INK, lw=7)
+        a.line(pts, color=rgba("ff9ec4"), lw=3)
+    a.chord(60, 66, 46, 50, 180, 360, fill=rgba("ffbfdc"), lw=5)
+    # 아래 주름
+    for index in range(5):
+        a.arc(23 + index * 18.5, 66, 9.5, 6, 0, 180, lw=4)
+    a.arc(44, 40, 16, 12, 200, 280, color=WHITE, lw=5)
+    a.eyes(62, 48, gap=12, r=4)
+    a.ellipse(48, 58, 6, 3.5, fill=PINK, outline=None)
+    a.ellipse(76, 58, 6, 3.5, fill=PINK, outline=None)
+    a.arc(62, 54, 5, 4, 20, 160, lw=3)
+    return a.result()
+
+
+def make_coconut(frame):
+    a = Art(120, 134)
+    bob = 0 if frame == 0 else -3
+    legs(a, 50, 70, 98 + bob, 126, frame)
+    # 머리털
+    for index in range(5):
+        x = 42 + index * 9
+        a.line([(x, 34 + bob), (x - 4 + index * 2, 18 + bob)], lw=4)
+    a.ellipse(60, 66 + bob, 40, 38, fill=rgba("8f5c36"))
+    a.arc(46, 52 + bob, 18, 14, 200, 280, color=rgba("b88459"), lw=5)
+    # 선글라스
+    a.rrect(36, 54 + bob, 58, 70 + bob, 6, fill=INK, outline=None)
+    a.rrect(64, 54 + bob, 86, 70 + bob, 6, fill=INK, outline=None)
+    a.line([(56, 58 + bob), (66, 58 + bob)], lw=4)
+    a.line([(40, 57 + bob), (48, 57 + bob)], color=rgba("8a8799"), lw=2.5)
+    a.arc(64, 82 + bob, 10, 6, 10, 150, lw=4)
+    return a.result()
+
+
+def make_coco_kid(frame):
+    a = Art(84, 96)
+    bob = 0 if frame == 0 else -3
+    legs(a, 34, 50, 70 + bob, 90, frame, stride=6, lw=5, foot=6)
+    a.ellipse(42, 54 + bob, 26, 24, fill=rgba("fffaf0"))
+    a.chord(42, 44 + bob, 28, 22, 180, 360, fill=rgba("8f5c36"))
+    a.eyes(44, 56 + bob, gap=9, r=3.4)
+    a.ellipse(46, 66 + bob, 3, 4, fill=INK, outline=None)
+    return a.result()
+
+
+# ---------------------------------------------------------------------------------------------
+# 몬스터 3: 설산
+
+def make_snowman(frame):
+    a = Art(130, 168)
+    bob = 0 if frame == 0 else -6
+    sway = 10 if frame == 0 else -10
+    a.line([(36, 104 + bob), (8, 86 + bob + sway)], color=INK, lw=7)
+    a.line([(36, 104 + bob), (8, 86 + bob + sway)], color=BROWN, lw=3)
+    a.line([(94, 104 + bob), (122, 86 + bob - sway)], color=INK, lw=7)
+    a.line([(94, 104 + bob), (122, 86 + bob - sway)], color=BROWN, lw=3)
+    a.ellipse(65, 128 + bob * 0.5, 38, 34, fill=SNOW)
+    for y in (116, 134):
+        a.dot(65, y + bob * 0.5, 4)
+    a.ellipse(65, 72 + bob, 28, 26, fill=SNOW)
+    a.rrect(40, 90 + bob, 90, 102 + bob, 5, fill=RED, lw=4)
+    a.rrect(70, 94 + bob, 84, 116 + bob, 4, fill=RED, lw=4)
+    a.eyes(64, 66 + bob, gap=10, r=4)
+    a.poly([(66, 74 + bob), (92, 80 + bob), (66, 82 + bob)], fill=ORANGE, lw=3.5)
+    # 양동이 모자 (삐뚤게)
+    a.poly([(42, 50 + bob), (48, 20 + bob), (80, 22 + bob), (88, 52 + bob)], fill=SKY, lw=5)
+    a.line([(40, 50 + bob), (90, 53 + bob)], lw=5)
+    return a.result()
+
+
+def make_snowball(frame):
+    a = Art(84, 92)
+    bob = 0 if frame == 0 else -4
+    legs(a, 34, 50, 66 + bob, 86, frame, stride=6, lw=5, foot=6)
+    a.ellipse(42, 50 + bob, 28, 26, fill=SNOW)
+    a.arc(32, 40 + bob, 10, 8, 200, 290, color=ICE_BLUE, lw=4)
+    a.eyes(44, 48 + bob, gap=10, r=3.6)
+    a.ellipse(46, 60 + bob, 4.5, 5, fill=INK, outline=None)
+    return a.result()
+
+
+def make_penguin(frame):
+    """배로 미끄러지는 펭귄."""
+    a = Art(150, 110)
+    flap = -14 if frame == 0 else 6
+    # 속도선
+    for index, y in enumerate((48, 62, 76)):
+        x0 = 4 + (index * 6 if frame == 0 else 12 - index * 4)
+        a.line([(x0, y), (x0 + 22, y)], color=ICE_BLUE, lw=4)
+    a.ellipse(40, 82, 9, 5, fill=ORANGE, lw=3)
+    a.ellipse(46, 74, 9, 5, fill=ORANGE, lw=3)
+    a.blob(80, 72, 50, 24, fill=rgba("3b3f55"), lw=5)
+    a.blob(84, 82, 40, 12, fill=WHITE, outline=None)
+    a.blob(80, 58, 16, 7, angle=flap, fill=rgba("3b3f55"), lw=4)
+    # 머리 + 목도리
+    a.ellipse(122, 60, 22, 21, fill=rgba("3b3f55"))
+    a.ellipse(126, 64, 13, 13, fill=WHITE, outline=None)
+    a.rrect(100, 68, 116, 84, 5, fill=RED, lw=4)
+    a.poly([(140, 62), (150, 67), (140, 72)], fill=ORANGE, lw=3)
+    a.dot(124, 58, 3.6)
+    a.dot(134, 58, 3.6)
+    a.line([(118, 50), (128, 53)], lw=3)
+    return a.result()
+
+
+def make_yeti(frame):
+    a = Art(264, 270)
+    up = 0 if frame == 0 else -20
+    legs(a, 106, 158, 214, 256, frame, stride=6, lw=10, foot=14)
+    # 팔 (털 뭉치)
+    for side in (-1, 1):
+        hx, hy = 132 + side * 104, 120 + up * (1 if side < 0 else -0.4)
+        a.line([(132 + side * 62, 150), (hx, hy)], color=INK, lw=34)
+        a.line([(132 + side * 62, 150), (hx, hy)], color=SNOW, lw=24)
+        a.cloud([(hx, hy, 18), (hx + side * 8, hy - 12, 12)], fill=SNOW, lw=5)
+    a.cloud([(132, 140, 70), (90, 170, 44), (174, 170, 44), (100, 110, 40), (164, 110, 40), (132, 96, 44), (132, 196, 50)], fill=SNOW, lw=6)
+    a.ellipse(132, 136, 44, 40, fill=rgba("9fd3ff"))
+    a.eyes(132, 128, gap=16, r=5.5)
+    a.line([(110, 114), (124, 120)], lw=4)
+    a.line([(154, 114), (140, 120)], lw=4)
+    a.chord(132, 150, 22, 16, 0, 180, fill=INK, outline=None)
+    a.poly([(118, 150), (124, 160), (130, 150)], fill=WHITE, outline=None)
+    a.poly([(134, 150), (140, 160), (146, 150)], fill=WHITE, outline=None)
+    return a.result()
+
+
+# ---------------------------------------------------------------------------------------------
 # 배경
 
-def make_map(path):
-    """1920x1080 좌표로 그려 2560x1440으로 저장."""
-    out_w, out_h = 2560, 1440
-    ss = 2
-    k = out_w / map_data.VIEW_W
-    a = Art(out_w, out_h, ss=ss, lw=6)
-    rng = random.Random(7)
+THEMES = {
+    "meadow": dict(
+        base="c9ec9c", patch="bde58c", shade="a9d67c", scribble="8cc765",
+        road=("f6e3b4", "fbeecb"), pebble=("e3cc96", "d9bf85"),
+        pond=("9fdcff", (1040, 990, 150, 46)),
+    ),
+    "beach": dict(
+        base="f8e4b2", patch="f2d79c", shade="e2c283", scribble="e6c98b",
+        road=("b9814a", "d39d63"), pebble=("9c6838", "8a5a30"),
+        pond=("8fdcff", (1060, 990, 140, 40)),
+    ),
+    "snow": dict(
+        base="eef5fd", patch="e0ecfa", shade="cbdcef", scribble="c7dbf2",
+        road=("c4d6ec", "d8e5f4"), pebble=("aec3dc", "9fb6d1"),
+        pond=("bfe6ff", (1060, 990, 150, 42)),
+    ),
+}
 
-    def P(pts):
-        return [(x * k, y * k) for x, y in pts]
 
-    # 풀밭: 밝은 연두 바탕 + 살짝 진한 얼룩
-    a.d.rectangle([0, 0, out_w * ss, out_h * ss], fill=rgba("c9ec9c"))
-    for _ in range(46):
-        x, y = rng.uniform(0, 1920), rng.uniform(0, 1080)
-        a.blob(x * k, y * k, rng.uniform(70, 220) * k, rng.uniform(40, 110) * k, angle=rng.uniform(-20, 20),
-               fill=rgba("bde58c"), outline=None, n=24)
+def draw_gate(a, k, gate):
+    gx, gy = gate
 
-    # 연못 (왼쪽 아래) — 길과 떨어진 곳
-    a.blob(1040 * k, 990 * k, 150 * k, 46 * k, fill=rgba("9fdcff"), lw=6, n=40)
-    a.arc(1010 * k, 985 * k, 30 * k, 8 * k, 180, 360, color=WHITE, lw=4)
-    a.arc(1090 * k, 1000 * k, 22 * k, 6 * k, 180, 360, color=WHITE, lw=4)
-
-    # 길: 먹선 → 모래색 → 밝은 가운데
-    pk = P(path)
-    width = map_data.PATH_WIDTH * k
-    # (굵은 선은 이음매에 틈이 생겨서 원을 촘촘히 찍는다)
-    for color, w in ((INK, width + 12), (rgba("f6e3b4"), width), (rgba("fbeecb"), width * 0.5)):
-        for x, y in pk:
-            a.dot(x, y, w * 0.5, color)
-    # 길 위 자갈·발자국
-    total = len(path)
-    for index in range(6, total - 4, 9):
-        x, y = path[index]
-        nx, ny = path[index + 1][0] - x, path[index + 1][1] - y
-        length = math.hypot(nx, ny) or 1.0
-        off = rng.uniform(-26, 26)
-        px, py = x - ny / length * off, y + nx / length * off
-        if rng.random() < 0.5:
-            a.ellipse(px * k, py * k, rng.uniform(4, 8) * k, rng.uniform(3, 5) * k, fill=rgba("e3cc96"), outline=None)
-        else:
-            a.ellipse(px * k, py * k, 5 * k, 3.5 * k, fill=None, outline=rgba("d9bf85"), lw=2.5)
-
-    def free(x, y, margin):
-        if map_data.dist_to_path((x, y), path) < map_data.PATH_WIDTH * 0.5 + margin:
-            return False
-        for sx, sy in map_data.SPOTS:
-            if abs(x - sx) < 95 + margin * 0.5 and -150 - margin * 0.3 < y - sy < 55 + margin * 1.4:
-                return False
-        wx, wy = map_data.WIZARD
-        if abs(x - wx) < 80 and -190 < y - wy < 40:
-            return False
-        gx, gy = map_data.GATE
-        if x > gx - 150 and abs(y - gy + 60) < 190:
-            return False
-        return True
-
-    # 풀 낙서
-    for _ in range(420):
-        x, y = rng.uniform(10, 1910), rng.uniform(10, 1070)
-        if not free(x, y, 8):
-            continue
-        s = rng.uniform(0.8, 1.3)
-        color = rgba("8cc765")
-        a.line([((x - 7 * s) * k, (y - 6 * s) * k), ((x - 3 * s) * k, y * k)], color=color, lw=3)
-        a.line([(x * k, (y - 9 * s) * k), (x * k, y * k)], color=color, lw=3)
-        a.line([((x + 7 * s) * k, (y - 6 * s) * k), ((x + 3 * s) * k, y * k)], color=color, lw=3)
-
-    # 꽃
-    for _ in range(70):
-        x, y = rng.uniform(20, 1900), rng.uniform(20, 1060)
-        if not free(x, y, 14):
-            continue
-        petal = rng.choice([WHITE, PINK, YELLOW])
-        for t in range(5):
-            ang = 2 * math.pi * t / 5
-            a.ellipse((x + 6 * math.cos(ang)) * k, (y + 6 * math.sin(ang)) * k, 5 * k, 5 * k, fill=petal, lw=2.5)
-        a.dot(x * k, y * k, 3.5 * k, ORANGE)
-
-    # 바위 (가끔 얼굴이 있다)
-    for _ in range(26):
-        x, y = rng.uniform(30, 1890), rng.uniform(40, 1050)
-        if not free(x, y, 30):
-            continue
-        r = rng.uniform(16, 30)
-        a.ellipse(x * k, (y + r * 0.5) * k, r * 1.2 * k, r * 0.35 * k, fill=rgba("a9d67c"), outline=None)
-        a.blob(x * k, y * k, r * k, r * 0.78 * k, fill=STONE, lw=5, power=2.6, n=24)
-        a.arc((x - r * 0.3) * k, (y - r * 0.25) * k, r * 0.35 * k, r * 0.3 * k, 190, 280, color=WHITE, lw=4)
-        if rng.random() < 0.45:
-            a.dot((x - r * 0.25) * k, y * k, 2.6 * k)
-            a.dot((x + r * 0.25) * k, y * k, 2.6 * k)
-            a.line([((x - r * 0.12) * k, (y + r * 0.28) * k), ((x + r * 0.12) * k, (y + r * 0.28) * k)], lw=2.5)
-
-    # 나무: 아래쪽에 있는 것이 위를 덮도록 y순으로
-    trees = []
-    attempts = 0
-    while len(trees) < 64 and attempts < 4000:
-        attempts += 1
-        x, y = rng.uniform(-10, 1930), rng.uniform(60, 1075)
-        if not free(x, y, 52):
-            continue
-        # 나무는 위로 길다. 잎이 길을 덮으면 몬스터가 나무 위를 걷는 것처럼 보인다
-        half = map_data.PATH_WIDTH * 0.5
-        if map_data.dist_to_path((x, y - 60), path) < half + 40 or map_data.dist_to_path((x, y - 110), path) < half + 30:
-            continue
-        if any(abs(x - tx) < 46 and abs(y - ty) < 30 for tx, ty, _, _ in trees):
-            continue
-        # 화면 위쪽 HUD, 아래 스펠 바 자리는 비워 둔다
-        if (y < 215 and x < 470) or (y > 900 and 560 < x < 1360) or (y < 150 and x > 1640):
-            continue
-        trees.append((x, y, rng.uniform(0.85, 1.25), rng.random()))
-    trees.sort(key=lambda t: t[1])
-    for x, y, s, kind in trees:
-        a.ellipse(x * k, (y + 2) * k, 30 * s * k, 9 * s * k, fill=rgba("a9d67c"), outline=None)
-        a.line([(x * k, y * k), (x * k, (y - 34 * s) * k)], color=INK, lw=15 * s)
-        a.line([(x * k, y * k), (x * k, (y - 34 * s) * k)], color=BROWN, lw=8 * s)
-        leaf = rgba("7fcf6a") if kind < 0.6 else rgba("63bf7c")
-        if kind < 0.75:
-            a.cloud([((x - 20 * s) * k, (y - 56 * s) * k, 22 * s * k), ((x + 20 * s) * k, (y - 56 * s) * k, 22 * s * k),
-                     (x * k, (y - 78 * s) * k, 26 * s * k), (x * k, (y - 52 * s) * k, 22 * s * k)], fill=leaf, lw=5)
-            a.arc((x - 6 * s) * k, (y - 78 * s) * k, 14 * s * k, 12 * s * k, 190, 290, color=rgba("b6ec9c"), lw=5)
-        else:
-            a.poly([((x - 30 * s) * k, (y - 28 * s) * k), (x * k, (y - 112 * s) * k), ((x + 30 * s) * k, (y - 28 * s) * k)], fill=leaf, lw=5)
-        if kind > 0.9:
-            a.dot((x - 8 * s) * k, (y - 60 * s) * k, 3 * k)
-            a.dot((x + 8 * s) * k, (y - 60 * s) * k, 3 * k)
-
-    # 입구 표지판
-    sx, sy = 70, 170
-    a.line([(sx * k, (sy + 40) * k), (sx * k, sy * k)], lw=7)
-    a.rrect((sx - 44) * k, (sy - 34) * k, (sx + 44) * k, (sy + 6) * k, 8 * k, fill=WHITE, lw=5)
-    a.poly([((sx - 20) * k, (sy - 14) * k), ((sx + 6) * k, (sy - 14) * k), ((sx + 6) * k, (sy - 24) * k), ((sx + 26) * k, (sy - 14) * k),
-            ((sx + 6) * k, (sy - 4) * k), ((sx + 6) * k, (sy - 14) * k)], fill=RED, lw=4)
-
-    # 성문 (오른쪽 끝)
-    gx, gy = map_data.GATE
     def K(x, y):
         return ((gx + x) * k, (gy + y) * k)
-    a.ellipse(K(-10, 34)[0], K(-10, 34)[1], 150 * k, 30 * k, fill=rgba("a9d67c"), outline=None)
     for tx in (-96, 56):
         a.rrect(K(tx, -250)[0], K(tx, -250)[1], K(tx + 62, 30)[0], K(tx + 62, 30)[1], 10 * k, fill=WHITE, lw=6)
         for bx in (tx - 6, tx + 20, tx + 46):
@@ -928,53 +1006,296 @@ def make_map(path):
     a.line([K(51, -40), K(51, 30)], lw=6, cap=False)
     for bx in (-34, -8, 18, 44):
         a.rrect(K(bx, -192)[0], K(bx, -192)[1], K(bx + 20, -164)[0], K(bx + 20, -164)[1], 4 * k, fill=STONE, lw=5)
-    # 깃발
     a.line([K(-65, -276), K(-65, -340)], lw=6)
     a.poly([K(-65, -340), K(-22, -326), K(-65, -310)], fill=RED, lw=5)
     a.line([K(87, -276), K(87, -340)], lw=6)
     a.poly([K(87, -340), K(130, -326), K(87, -310)], fill=SKY, lw=5)
-    # 성문 위의 멍한 얼굴
     a.dot(K(0, -128)[0], K(0, -128)[1], 5 * k)
     a.dot(K(24, -128)[0], K(24, -128)[1], 5 * k)
     a.line([K(6, -112), K(18, -112)], lw=4)
 
+
+def draw_tree(a, k, theme, x, y, s, kind):
+    if theme == "beach":
+        # 야자수: 휘어진 줄기 + 잎 다섯
+        lean = 18 * s if kind < 0.5 else -18 * s
+        top = (x + lean, y - 92 * s)
+        trunk = [(x, y), (x + lean * 0.3, y - 40 * s), top]
+        a.line([(px * k, py * k) for px, py in trunk], color=INK, lw=15 * s)
+        a.line([(px * k, py * k) for px, py in trunk], color=rgba("c99a5e"), lw=8 * s)
+        for angle in (-160, -120, -60, -20, 200):
+            t = math.radians(angle)
+            tip = (top[0] + 46 * s * math.cos(t), top[1] + 30 * s * math.sin(t) + 14 * s)
+            mid = ((top[0] + tip[0]) / 2, (top[1] + tip[1]) / 2 - 10 * s)
+            a.blob(mid[0] * k, mid[1] * k, 28 * s * k, 9 * s * k, angle=math.degrees(math.atan2(tip[1] - top[1], tip[0] - top[0])),
+                   fill=rgba("62c46e"), lw=5)
+        a.dot((top[0] - 6 * s) * k, (top[1] + 6 * s) * k, 6 * s * k, rgba("8f5c36"))
+        a.dot((top[0] + 6 * s) * k, (top[1] + 8 * s) * k, 6 * s * k, rgba("8f5c36"))
+        return
+    if theme == "snow":
+        # 눈 덮인 전나무 3단
+        a.line([(x * k, y * k), (x * k, (y - 20 * s) * k)], color=INK, lw=13 * s)
+        a.line([(x * k, y * k), (x * k, (y - 20 * s) * k)], color=BROWN, lw=7 * s)
+        leaf = rgba("4f9f7a") if kind < 0.6 else rgba("3f8a6e")
+        for index, (w, top, bottom) in enumerate(((34, 70, 18), (27, 94, 48), (19, 116, 74))):
+            a.poly([((x - w * s) * k, (y - bottom * s) * k), (x * k, (y - top * s) * k), ((x + w * s) * k, (y - bottom * s) * k)], fill=leaf, lw=5)
+            a.poly([((x - w * 0.55 * s) * k, (y - (top - (top - bottom) * 0.45) * s) * k), (x * k, (y - top * s) * k),
+                    ((x + w * 0.55 * s) * k, (y - (top - (top - bottom) * 0.45) * s) * k)], fill=SNOW, outline=None)
+        if kind > 0.88:
+            a.dot((x - 7 * s) * k, (y - 46 * s) * k, 3 * k)
+            a.dot((x + 7 * s) * k, (y - 46 * s) * k, 3 * k)
+        return
+    a.line([(x * k, y * k), (x * k, (y - 34 * s) * k)], color=INK, lw=15 * s)
+    a.line([(x * k, y * k), (x * k, (y - 34 * s) * k)], color=BROWN, lw=8 * s)
+    leaf = rgba("7fcf6a") if kind < 0.6 else rgba("63bf7c")
+    if kind < 0.75:
+        a.cloud([((x - 20 * s) * k, (y - 56 * s) * k, 22 * s * k), ((x + 20 * s) * k, (y - 56 * s) * k, 22 * s * k),
+                 (x * k, (y - 78 * s) * k, 26 * s * k), (x * k, (y - 52 * s) * k, 22 * s * k)], fill=leaf, lw=5)
+        a.arc((x - 6 * s) * k, (y - 78 * s) * k, 14 * s * k, 12 * s * k, 190, 290, color=rgba("b6ec9c"), lw=5)
+    else:
+        a.poly([((x - 30 * s) * k, (y - 28 * s) * k), (x * k, (y - 112 * s) * k), ((x + 30 * s) * k, (y - 28 * s) * k)], fill=leaf, lw=5)
+    if kind > 0.9:
+        a.dot((x - 8 * s) * k, (y - 60 * s) * k, 3 * k)
+        a.dot((x + 8 * s) * k, (y - 60 * s) * k, 3 * k)
+
+
+def draw_flower(a, k, theme, rng, x, y):
+    if theme == "beach":
+        if rng.random() < 0.5:
+            a.star(x * k, y * k, 10 * k, 4.5 * k, 5, fill=rgba("ff9a6a"), lw=3, rot=rng.uniform(0, 360))
+        else:
+            a.chord(x * k, y * k, 9 * k, 9 * k, 180, 360, fill=rgba("ffe1ea"), lw=3)
+            for dx in (-4, 0, 4):
+                a.line([((x + dx * 0.6) * k, (y - 1) * k), ((x + dx) * k, (y - 7) * k)], color=rgba("e8a6b8"), lw=2)
+        return
+    if theme == "snow":
+        a.poly([(x * k, (y - 9) * k), ((x + 5) * k, y * k), (x * k, (y + 9) * k), ((x - 5) * k, y * k)], fill=rgba("aee0ff"), lw=3)
+        return
+    petal = rng.choice([WHITE, PINK, YELLOW])
+    for t in range(5):
+        ang = 2 * math.pi * t / 5
+        a.ellipse((x + 6 * math.cos(ang)) * k, (y + 6 * math.sin(ang)) * k, 5 * k, 5 * k, fill=petal, lw=2.5)
+    a.dot(x * k, y * k, 3.5 * k, ORANGE)
+
+
+def draw_road(a, k, theme, path, rng):
+    t = THEMES[theme]
+    pk = [(x * k, y * k) for x, y in path]
+    width = map_data.PATH_WIDTH * k
+    # 굵은 선은 이음매에 틈이 생겨서 원을 촘촘히 찍는다
+    for color, w in ((INK, width + 12), (rgba(t["road"][0]), width), (rgba(t["road"][1]), width * 0.5)):
+        for x, y in pk:
+            a.dot(x, y, w * 0.5, color)
+
+    if theme == "beach":
+        # 나무 판자 길: 길을 가로지르는 판자 틈
+        for index in range(3, len(path) - 2, 3):
+            x, y = path[index]
+            nx, ny = path[index + 1][0] - path[index - 1][0], path[index + 1][1] - path[index - 1][1]
+            length = math.hypot(nx, ny) or 1.0
+            px, py = -ny / length, nx / length
+            h = map_data.PATH_WIDTH * 0.46
+            a.line([((x - px * h) * k, (y - py * h) * k), ((x + px * h) * k, (y + py * h) * k)], color=rgba("8a5a30"), lw=2.5, cap=False)
+        return
+
+    for index in range(6, len(path) - 4, 9):
+        x, y = path[index]
+        nx, ny = path[index + 1][0] - x, path[index + 1][1] - y
+        length = math.hypot(nx, ny) or 1.0
+        off = rng.uniform(-26, 26)
+        px, py = x - ny / length * off, y + nx / length * off
+        if rng.random() < 0.5:
+            a.ellipse(px * k, py * k, rng.uniform(4, 8) * k, rng.uniform(3, 5) * k, fill=rgba(t["pebble"][0]), outline=None)
+        else:
+            a.ellipse(px * k, py * k, 5 * k, 3.5 * k, fill=None, outline=rgba(t["pebble"][1]), lw=2.5)
+
+
+def make_map(m, path):
+    """1920x1080 좌표로 그려 2560x1440으로 저장."""
+    theme = m["theme"]
+    t = THEMES[theme]
+    out_w, out_h = 2560, 1440
+    ss = 2
+    k = out_w / map_data.VIEW_W
+    a = Art(out_w, out_h, ss=ss, lw=6)
+    rng = random.Random(7 + len(path))
+
+    # 바탕 + 얼룩
+    a.d.rectangle([0, 0, out_w * ss, out_h * ss], fill=rgba(t["base"]))
+    for _ in range(46):
+        x, y = rng.uniform(0, 1920), rng.uniform(0, 1080)
+        a.blob(x * k, y * k, rng.uniform(70, 220) * k, rng.uniform(40, 110) * k, angle=rng.uniform(-20, 20), fill=rgba(t["patch"]), outline=None, n=24)
+
+    sea_y = 0
+    if theme == "beach":
+        # 위쪽 바다: 젖은 모래 띠 → 물결 → 바다
+        sea_y = 118
+        a.d.rectangle([0, 0, out_w * ss, (sea_y + 14) * k * ss], fill=rgba("ecd29a"))
+        pts = [(x * k, (sea_y + 6 * math.sin(x / 38.0)) * k) for x in range(-20, 1960, 12)]
+        a.poly([(-20 * k, -20 * k)] + pts + [(1960 * k, -20 * k)], fill=rgba("7fd0ff"), lw=6)
+        for row, y in enumerate((30, 66)):
+            for x in range(40 + row * 60, 1920, 150):
+                a.arc((x + 30) * k, y * k, 26 * k, 9 * k, 200, 340, color=WHITE, lw=4)
+        a.arc(1500 * k, 52 * k, 40 * k, 14 * k, 190, 350, color=rgba("5bb7f0"), lw=5)
+
+    # 연못 (빈 아래쪽)
+    color, (px, py, prx, pry) = t["pond"]
+    a.blob(px * k, py * k, prx * k, pry * k, fill=rgba(color), lw=6, n=40)
+    if theme == "snow":
+        a.line([((px - 60) * k, (py - 10) * k), ((px - 20) * k, (py + 8) * k), ((px + 30) * k, (py - 6) * k)], color=WHITE, lw=4)
+        a.line([((px + 40) * k, (py + 14) * k), ((px + 80) * k, (py - 4) * k)], color=WHITE, lw=4)
+    else:
+        a.arc((px - 30) * k, (py - 5) * k, 30 * k, 8 * k, 180, 360, color=WHITE, lw=4)
+        a.arc((px + 50) * k, (py + 10) * k, 22 * k, 6 * k, 180, 360, color=WHITE, lw=4)
+
+    draw_road(a, k, theme, path, rng)
+
+    def free(x, y, margin):
+        if y < sea_y + 16 + margin * 0.3:
+            return False
+        if map_data.dist_to_path((x, y), path) < map_data.PATH_WIDTH * 0.5 + margin:
+            return False
+        for sx, sy in m["spots"]:
+            if abs(x - sx) < 95 + margin * 0.5 and -150 - margin * 0.3 < y - sy < 55 + margin * 1.4:
+                return False
+        wx, wy = m["wizard"]
+        if abs(x - wx) < 80 and -190 < y - wy < 40:
+            return False
+        gx, gy = m["gate"]
+        if x > gx - 150 and abs(y - gy + 60) < 190:
+            return False
+        if abs(x - px) < prx + 10 and abs(y - py) < pry + 10:
+            return False
+        return True
+
+    # 풀 낙서 (설산은 반짝이)
+    for _ in range(420):
+        x, y = rng.uniform(10, 1910), rng.uniform(10, 1070)
+        if not free(x, y, 8):
+            continue
+        s = rng.uniform(0.8, 1.3)
+        color = rgba(t["scribble"])
+        if theme == "snow":
+            a.line([((x - 5 * s) * k, y * k), ((x + 5 * s) * k, y * k)], color=color, lw=3)
+            a.line([(x * k, (y - 5 * s) * k), (x * k, (y + 5 * s) * k)], color=color, lw=3)
+            continue
+        a.line([((x - 7 * s) * k, (y - 6 * s) * k), ((x - 3 * s) * k, y * k)], color=color, lw=3)
+        a.line([(x * k, (y - 9 * s) * k), (x * k, y * k)], color=color, lw=3)
+        a.line([((x + 7 * s) * k, (y - 6 * s) * k), ((x + 3 * s) * k, y * k)], color=color, lw=3)
+
+    for _ in range(70):
+        x, y = rng.uniform(20, 1900), rng.uniform(20, 1060)
+        if free(x, y, 14):
+            draw_flower(a, k, theme, rng, x, y)
+
+    # 바위 (가끔 얼굴. 설산은 눈 모자)
+    for _ in range(26):
+        x, y = rng.uniform(30, 1890), rng.uniform(40, 1050)
+        if not free(x, y, 30):
+            continue
+        r = rng.uniform(16, 30)
+        a.ellipse(x * k, (y + r * 0.5) * k, r * 1.2 * k, r * 0.35 * k, fill=rgba(t["shade"]), outline=None)
+        a.blob(x * k, y * k, r * k, r * 0.78 * k, fill=STONE, lw=5, power=2.6, n=24)
+        if theme == "snow":
+            a.chord(x * k, (y - r * 0.3) * k, r * 0.85 * k, r * 0.5 * k, 180, 360, fill=SNOW, outline=None)
+        else:
+            a.arc((x - r * 0.3) * k, (y - r * 0.25) * k, r * 0.35 * k, r * 0.3 * k, 190, 280, color=WHITE, lw=4)
+        if rng.random() < 0.45:
+            a.dot((x - r * 0.25) * k, y * k, 2.6 * k)
+            a.dot((x + r * 0.25) * k, y * k, 2.6 * k)
+            a.line([((x - r * 0.12) * k, (y + r * 0.28) * k), ((x + r * 0.12) * k, (y + r * 0.28) * k)], lw=2.5)
+
+    # 해변 소품: 파라솔
+    if theme == "beach":
+        for ux, uy in ((1250, 1010), (150, 1010)):
+            if not free(ux, uy, 20):
+                continue
+            a.ellipse(ux * k, (uy + 4) * k, 60 * k, 14 * k, fill=rgba(t["shade"]), outline=None)
+            a.rrect((ux - 40) * k, (uy - 6) * k, (ux + 40) * k, (uy + 10) * k, 6 * k, fill=rgba("7fd6ff"), lw=4)
+            a.line([(ux * k, uy * k), ((ux + 6) * k, (uy - 74) * k)], lw=5)
+            a.chord((ux + 6) * k, (uy - 70) * k, 58 * k, 34 * k, 180, 360, fill=WHITE, lw=5)
+            for index in range(3):
+                a0 = 180 + index * 60
+                a.chord((ux + 6) * k, (uy - 70) * k, 58 * k, 34 * k, a0, a0 + 30, fill=RED, outline=None)
+
+    # 나무: 아래쪽에 있는 것이 위를 덮도록 y순으로
+    trees = []
+    attempts = 0
+    while len(trees) < (48 if theme == "beach" else 64) and attempts < 4000:
+        attempts += 1
+        x, y = rng.uniform(-10, 1930), rng.uniform(60, 1075)
+        if not free(x, y, 52):
+            continue
+        # 나무는 위로 길다. 잎이 길을 덮으면 몬스터가 나무 위를 걷는 것처럼 보인다
+        half = map_data.PATH_WIDTH * 0.5
+        if map_data.dist_to_path((x, y - 60), path) < half + 40 or map_data.dist_to_path((x, y - 110), path) < half + 30:
+            continue
+        if y - 110 < sea_y:
+            continue
+        if any(abs(x - tx) < 46 and abs(y - ty) < 30 for tx, ty, _, _ in trees):
+            continue
+        # 화면 위쪽 HUD, 아래 스펠 바 자리는 비워 둔다
+        if (y < 215 and x < 760) or (y > 900 and 560 < x < 1360) or (y < 150 and x > 1640):
+            continue
+        trees.append((x, y, rng.uniform(0.85, 1.25), rng.random()))
+    trees.sort(key=lambda tr: tr[1])
+    for x, y, s, kind in trees:
+        a.ellipse(x * k, (y + 2) * k, 30 * s * k, 9 * s * k, fill=rgba(t["shade"]), outline=None)
+        draw_tree(a, k, theme, x, y, s, kind)
+
+    # 입구 표지판
+    sx, sy = m["sign"]
+    a.line([(sx * k, (sy + 40) * k), (sx * k, sy * k)], lw=7)
+    a.rrect((sx - 44) * k, (sy - 34) * k, (sx + 44) * k, (sy + 6) * k, 8 * k, fill=WHITE, lw=5)
+    a.poly([((sx - 20) * k, (sy - 14) * k), ((sx + 6) * k, (sy - 14) * k), ((sx + 6) * k, (sy - 24) * k), ((sx + 26) * k, (sy - 14) * k),
+            ((sx + 6) * k, (sy - 4) * k), ((sx + 6) * k, (sy - 14) * k)], fill=RED, lw=4)
+
+    gx, gy = m["gate"]
+    a.ellipse((gx - 10) * k, (gy + 34) * k, 150 * k, 30 * k, fill=rgba(t["shade"]), outline=None)
+    draw_gate(a, k, m["gate"])
     return a.result()
 
 
 # ---------------------------------------------------------------------------------------------
 
-def write_map_inl(path_points, inl_path):
-    # 게임 규칙용으로는 24px 간격이면 충분하다
-    coarse = path_points[::3]
-    if coarse[-1] != path_points[-1]:
-        coarse.append(path_points[-1])
-
-    lines = [
-        "// Tools/Art/generate_art.py가 Tools/Art/map_data.py에서 생성한다. 직접 고치지 말 것.",
-        "",
-        "const FVector2f GMap01Path[] = {",
-    ]
-    for index in range(0, len(coarse), 6):
-        row = ", ".join("{ %.1ff, %.1ff }" % p for p in coarse[index:index + 6])
-        lines.append("\t" + row + ",")
+def write_maps_inl(paths, inl_path):
+    lines = ["// Tools/Art/generate_art.py가 Tools/Art/map_data.py에서 생성한다. 직접 고치지 말 것.", ""]
+    for m, path_points in zip(map_data.MAPS, paths):
+        key = m["key"]
+        # 게임 규칙용으로는 24px 간격이면 충분하다
+        coarse = path_points[::3]
+        if coarse[-1] != path_points[-1]:
+            coarse.append(path_points[-1])
+        lines.append("const FVector2f G%sPath[] = {" % key)
+        for index in range(0, len(coarse), 6):
+            lines.append("\t" + ", ".join("{ %.1ff, %.1ff }" % p for p in coarse[index:index + 6]) + ",")
+        lines.append("};")
+        lines.append("const FVector2f G%sSpots[] = {" % key)
+        lines.append("\t" + ", ".join("{ %.1ff, %.1ff }" % p for p in m["spots"]) + ",")
+        lines.append("};")
+        lines.append("")
+    lines.append("const FYJJMapGeometry GMapGeometry[] = {")
+    for m in map_data.MAPS:
+        key = m["key"]
+        lines.append("\t{ G%sPath, G%sSpots, { %.1ff, %.1ff }, { %.1ff, %.1ff }, TEXT(\"T_%s\") }," % (key, key, m["wizard"][0], m["wizard"][1], m["gate"][0], m["gate"][1], key))
     lines.append("};")
-    lines.append("")
-    lines.append("const FVector2f GMap01Spots[] = {")
-    lines.append("\t" + ", ".join("{ %.1ff, %.1ff }" % p for p in map_data.SPOTS) + ",")
-    lines.append("};")
-    lines.append("")
-    lines.append("const FVector2f GMap01Wizard = { %.1ff, %.1ff };" % map_data.WIZARD)
-    lines.append("const FVector2f GMap01Gate = { %.1ff, %.1ff };" % map_data.GATE)
     lines.append("")
     with open(inl_path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines))
 
 
+ENEMY_ART = (
+    ("Imp", make_imp), ("Chicken", make_chicken), ("Potato", make_potato), ("Toast", make_toast),
+    ("Mushroom", make_mushroom), ("PuddingKing", make_pudding_king),
+    ("Crab", make_crab), ("Jellyfish", make_jellyfish), ("Coconut", make_coconut), ("CocoKid", make_coco_kid), ("KingCrab", make_king_crab),
+    ("Snowman", make_snowman), ("Snowball", make_snowball), ("Penguin", make_penguin), ("Yeti", make_yeti),
+)
+
+
 def build_all():
     sprites = {}
 
-    for name, func in (("Imp", make_imp), ("Chicken", make_chicken), ("Potato", make_potato), ("Toast", make_toast),
-                       ("Mushroom", make_mushroom), ("PuddingKing", make_pudding_king)):
+    for name, func in ENEMY_ART:
         for frame in range(2):
             sprites["T_Enemy_%s_%d" % (name, frame)] = func(frame)
 
@@ -1018,9 +1339,9 @@ def build_all():
     return sprites
 
 
-def make_sheet(sprites, path):
+def make_sheet(sprites, path, names=None):
     """검토용 모음 시트."""
-    names = [n for n in sprites if n != "T_Map01"]
+    names = names or [n for n in sprites if not n.startswith("T_Map")]
     cell = 200
     cols = 10
     rows = (len(names) + cols - 1) // cols
@@ -1041,16 +1362,27 @@ def main():
     inl_path = sys.argv[2] if len(sys.argv) > 2 else None
     os.makedirs(out_dir, exist_ok=True)
 
-    path_points = map_data.smooth_path(8.0)
+    paths = []
+    for m in map_data.MAPS:
+        path = map_data.smooth_path(m["path"], 8.0)
+        problems = map_data.check(m, path)
+        if problems:
+            print("WARNING %s: %s" % (m["key"], "; ".join(problems)))
+        paths.append(path)
     if inl_path:
-        write_map_inl(path_points, inl_path)
+        write_maps_inl(paths, inl_path)
         print("map inl ->", inl_path)
 
     sprites = build_all()
-    sprites["T_Map01"] = make_map(path_points)
+    for m, path in zip(map_data.MAPS, paths):
+        img = make_map(m, path)
+        sprites["T_" + m["key"]] = img
+        # 작은 미리보기 (큰 그림을 밉맵 없이 줄여 그리면 지글거린다)
+        sprites["T_" + m["key"] + "_Thumb"] = img.resize((384, 216), Image.LANCZOS)
     for name, img in sprites.items():
         img.save(os.path.join(out_dir, name + ".png"))
     make_sheet(sprites, os.path.join(out_dir, "_sheet.png"))
+    make_sheet(sprites, os.path.join(out_dir, "_sheet_enemies.png"), ["T_Enemy_%s_%d" % (n, f) for n, _ in ENEMY_ART for f in range(2)])
     print("%d sprites -> %s" % (len(sprites), out_dir))
 
 

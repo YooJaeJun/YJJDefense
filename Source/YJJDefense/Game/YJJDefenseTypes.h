@@ -91,7 +91,18 @@ enum class EYJJEnemy : uint8
 	Potato,       // 근육 감자: 단단함
 	Toast,        // 날개 식빵: 비행
 	Mushroom,     // 응원 버섯: 주변 회복
-	PuddingKing,  // 대왕 푸딩: 보스
+	PuddingKing,  // 대왕 푸딩: 들판 보스
+	// 해변
+	Crab,         // 꽃게 병장: 갑옷이 두껍다
+	Jellyfish,    // 둥실 해파리: 비행 + 마법 저항
+	Coconut,      // 코코넛 형님: 깨지면 알맹이 둘
+	CocoKid,      // 코코 알맹이
+	KingCrab,     // 왕꽃게: 해변 보스, 물리에 아주 단단함
+	// 설산
+	Snowman,      // 눈사람: 녹으면 눈뭉치 둘
+	Snowball,     // 눈뭉치
+	Penguin,      // 썰매 펭귄: 아주 빠르고 얼음 면역
+	Yeti,         // 예티: 설산 보스, 병졸을 세게 때린다
 	Count
 };
 
@@ -142,6 +153,22 @@ struct FYJJEnemyDef
 	float MeleeInterval;
 	float Radius;
 	float HealPerSecond;
+	// 특수 능력 (기본값이면 없음)
+	EYJJEnemy SplitInto = EYJJEnemy::Count;   // 죽으면 이것으로 쪼개진다
+	int32 SplitCount = 0;
+	EYJJElement Immune = EYJJElement::None;   // 이 원소의 고유 효과(둔화·빙결 등)를 받지 않는다
+
+	bool HasSplit() const { return SplitInto != EYJJEnemy::Count && SplitCount > 0; }
+};
+
+// 맵의 모양 (Tools/Art/map_data.py → Game/YJJMaps.inl)
+struct FYJJMapGeometry
+{
+	TConstArrayView<FVector2f> Path;
+	TConstArrayView<FVector2f> Spots;
+	FVector2f Wizard;
+	FVector2f Gate;
+	const TCHAR* Texture;
 };
 
 struct FYJJWaveGroup

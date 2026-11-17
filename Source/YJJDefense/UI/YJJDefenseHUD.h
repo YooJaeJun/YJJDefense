@@ -8,6 +8,7 @@
 class AYJJDefenseGameMode;
 class UTexture2D;
 class UFont;
+class UYJJSaveGame;
 struct FCompositeFont;
 
 // 화면 전체를 Canvas로 그린다 (맵, 병졸, 몬스터, 이펙트, UI). 위젯·스프라이트 액터 없음.
@@ -55,6 +56,8 @@ private:
 		ToggleTower,    // A=병졸
 		TierPrev,
 		TierNext,
+		MapPrev,
+		MapNext,
 		ResultContinue,
 		BuildTower,     // A=자리, B=병졸
 		UpgradeTower,   // A=자리
@@ -148,7 +151,9 @@ private:
 	// ---- 준비·결과 화면 ----
 	void DrawLoadout();
 	void DrawResult();
-	void DrawDimmedMap(float Darkness);
+	// Map이 INDEX_NONE이면 지금 맵
+	void DrawDimmedMap(float Darkness, int32 Map = INDEX_NONE);
+	void DrawMapPicker(UYJJSaveGame& Save);
 
 	UTexture2D* LoadTex(const FString& Name);
 	UTexture2D* RuneTex(EYJJRune Rune) const { return RuneTextures[FMath::Min<int32>(static_cast<int32>(Rune), static_cast<int32>(EYJJRune::Count) - 1)]; }
@@ -158,7 +163,9 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<UTexture2D>> LoadedTextures;
 
-	UTexture2D* MapTexture = nullptr;
+	UTexture2D* MapTextures[8] = {};
+	UTexture2D* MapThumbs[8] = {};
+	UTexture2D* MapThumb(int32 Map) const { return MapThumbs[FMath::Clamp(Map, 0, static_cast<int32>(UE_ARRAY_COUNT(MapThumbs)) - 1)]; }
 	UTexture2D* EnemyTextures[static_cast<int32>(EYJJEnemy::Count)][2] = {};
 	UTexture2D* TowerTextures[static_cast<int32>(EYJJTower::Count)][YJJ::MaxTowerLevel + 1] = {};
 	UTexture2D* SoldierTextures[3] = {};

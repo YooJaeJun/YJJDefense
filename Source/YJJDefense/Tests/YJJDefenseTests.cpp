@@ -61,6 +61,22 @@ namespace YJJTests
 		return LivesByWave + FString::Printf(TEXT("→ %d"), Sim.Lives);
 	}
 
+	// 스펠 공이 날아가는 동안 적이 걸어갈 만큼 앞을 노린다
+	FVector2f LeadTarget(const FYJJDefenseSim& Sim, int32 EnemyId)
+	{
+		const FYJJEnemyState* Enemy = Sim.FindEnemy(EnemyId);
+		if (!Enemy)
+		{
+			return FVector2f::ZeroVector;
+		}
+		const FVector2f Muzzle = YJJMap::WizardPos() + FVector2f(-26.f, -118.f);
+		float Flight = FMath::Max(FVector2f::Distance(Muzzle, Enemy->Pos) / YJJData::SpellBallSpeed, 0.28f);
+		// 한 번 더 고쳐서 도착할 자리까지의 거리로
+		const FVector2f Ahead = YJJMap::PointAt(Enemy->Dist + YJJData::Enemy(Enemy->Type).Speed * Flight, Enemy->Lateral);
+		Flight = FMath::Max(FVector2f::Distance(Muzzle, Ahead) / YJJData::SpellBallSpeed, 0.28f);
+		return YJJMap::PointAt(Enemy->Dist + YJJData::Enemy(Enemy->Type).Speed * Flight, Enemy->Lateral);
+	}
+
 	int32 CountEvents(const FYJJDefenseSim& Sim, EYJJSimEvent Type, EYJJReaction Reaction = EYJJReaction::None)
 	{
 		int32 Count = 0;
@@ -300,22 +316,164 @@ bool FYJJProgressionTest::RunTest(const FString& Parameters)
 	Stats.WavesCleared = 10;
 	Stats.CombosCast = { YJJSpellForge::MakeComboId(EYJJRune::Fire, EYJJRune::Explosion), YJJSpellForge::MakeComboId(EYJJRune::Water, EYJJRune::Lightning) };
 
+	TestEqual(TEXT("처음엔 지도 하나"), SaveGame->UnlockedMaps, 1);
 	const FYJJRunReward First = YJJProgression::ApplyRun(*SaveGame, Stats);
 	TestEqual(TEXT("새 조합 둘"), First.NewCombos, 2);
 	TestEqual(TEXT("점수 = 웨이브 5 + 승리 3 + 별 3 + 조합 2"), First.TotalPoints, 13);
 	TestTrue(TEXT("첫 해금은 바람 룬"), First.NewUnlocks.Num() == 1 && !First.NewUnlocks[0].bTower && First.NewUnlocks[0].Index == static_cast<uint8>(EYJJRune::Wind));
 	TestTrue(TEXT("바람 룬이 풀렸다"), (SaveGame->UnlockedRunes & (1 << static_cast<int32>(EYJJRune::Wind))) != 0);
 	TestTrue(TEXT("다음 단계가 열린다"), First.bNewTier && SaveGame->MaxTier == 2);
+	TestTrue(TEXT("들판을 깨면 해변이 열린다"), First.NewMap == 1 && SaveGame->UnlockedMaps == 2);
 
 	const FYJJRunReward Second = YJJProgression::ApplyRun(*SaveGame, Stats);
 	TestEqual(TEXT("이미 아는 조합은 점수가 없다"), Second.NewCombos, 0);
 	TestTrue(TEXT("두 번째 해금은 마법사 탑"), Second.NewUnlocks.Num() == 1 && Second.NewUnlocks[0].bTower);
+	TestEqual(TEXT("같은 지도를 또 깨도 새 지도는 없다"), Second.NewMap, static_cast<int32>(INDEX_NONE));
+
+	FYJJRunStats Beach = Stats;
+	Beach.Map = 1;
+	TestEqual(TEXT("해변을 깨면 설산이 열린다"), YJJProgression::ApplyRun(*SaveGame, Beach).NewMap, 2);
+	FYJJRunStats Snow = Stats;
+	Snow.Map = 2;
+	TestEqual(TEXT("마지막 지도 다음은 없다"), YJJProgression::ApplyRun(*SaveGame, Snow).NewMap, static_cast<int32>(INDEX_NONE));
+	SaveGame->SelectedMap = 9;
+	YJJProgression::SanitizeSelection(*SaveGame);
+	TestEqual(TEXT("없는 지도는 고를 수 없다"), SaveGame->SelectedMap, YJJMap::NumMaps() - 1);
 
 	// 가방은 룬 5개까지: 여섯 번째는 못 넣고, 하나 빼면 넣을 수 있다
 	TestFalse(TEXT("가방이 꽉 차면 못 넣는다"), YJJProgression::ToggleRune(*SaveGame, EYJJRune::Wind));
 	TestTrue(TEXT("하나 빼기"), YJJProgression::ToggleRune(*SaveGame, EYJJRune::Ice));
 	TestTrue(TEXT("빈자리에 넣기"), YJJProgression::ToggleRune(*SaveGame, EYJJRune::Wind));
 	TestFalse(TEXT("잠긴 룬은 못 넣는다"), YJJProgression::ToggleRune(*SaveGame, EYJJRune::Split));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FYJJEnemyTraitsTest, "YJJDefense.Battle.EnemyTraits", YJJTests::Flags)
+bool FYJJEnemyTraitsTest::RunTest(const FString& Parameters)
+{
+	using namespace YJJTests;
+
+	// 맵마다 길과 자리가 다르다
+	{
+		FYJJDefenseSim Sim;
+		FYJJRunConfig Config = FullConfig();
+		Config.Map = 1;
+		Sim.Reset(Config);
+		TestEqual(TEXT("해변 맵이 골라진다"), YJJMap::GetActive(), 1);
+		TestEqual(TEXT("건설 자리 수 = 해변 자리 수"), Sim.Towers.Num(), YJJMap::Spots().Num());
+		TestEqual(TEXT("해변 웨이브 10개"), YJJData::NumWaves(), 10);
+	}
+
+	// 코코넛: 깨지면 알맹이 둘
+	{
+		FYJJRunConfig Config = FullConfig();
+		Config.Disks[0][0] = EYJJRune::Lightning;
+		Config.Disks[0][1] = EYJJRune::Lightning;
+		FYJJDefenseSim Sim;
+		Sim.Reset(Config);
+		const int32 Id = Sim.DebugSpawnEnemy(EYJJEnemy::Coconut, 1500.f);
+		const FVector2f Pos = Sim.FindEnemy(Id)->Pos;
+		Sim.WizardLevel = YJJData::MaxWizardLevel;   // 한 방에 깨지게
+		Sim.CastSpell(0, Pos);
+		StepSeconds(Sim, 1.5f);
+		int32 Kids = 0;
+		for (const FYJJEnemyState& Enemy : Sim.Enemies)
+		{
+			Kids += (Enemy.Type == EYJJEnemy::CocoKid && FMath::Abs(Enemy.Dist - 1500.f) < 200.f) ? 1 : 0;
+		}
+		TestTrue(TEXT("코코넛이 처치됐다"), Sim.FindEnemy(Id) == nullptr && Sim.Kills >= 1);
+		TestEqual(TEXT("코코 알맹이 둘이 나온다"), Kids + (Sim.Kills - 1), 2);
+	}
+
+	// 펭귄: 얼음 둔화·빙결이 안 통하지만 원소는 묻는다
+	{
+		FYJJRunConfig Config = FullConfig();
+		Config.Disks[0][0] = EYJJRune::Ice;
+		Config.Disks[0][1] = EYJJRune::None;
+		Config.Disks[1][0] = EYJJRune::Ice;
+		Config.Disks[1][1] = EYJJRune::Water;
+		FYJJDefenseSim Sim;
+		Sim.Reset(Config);
+		const int32 Id = Sim.DebugSpawnEnemy(EYJJEnemy::Penguin, 2400.f);
+		Sim.CastSpell(0, LeadTarget(Sim, Id));
+		bool bImmuneShown = false;
+		// 공이 날아가는 시간(거리 700px 남짓 = 0.7초쯤)보다 넉넉히
+		for (int32 Step = 0; Step < 90; ++Step)
+		{
+			Sim.Step();
+			bImmuneShown |= CountEvents(Sim, EYJJSimEvent::EnemyImmune) > 0;
+			Sim.Events.Reset();
+		}
+		const FYJJEnemyState* Penguin = Sim.FindEnemy(Id);
+		TestTrue(TEXT("아이스볼에 맞아도 안 느려진다"), Penguin && Penguin->SlowTime <= 0.f);
+		TestTrue(TEXT("\"안 얼어!\" 표시"), bImmuneShown);
+		TestTrue(TEXT("얼음 원소는 묻는다 (반응용)"), Penguin && Penguin->Aura == EYJJElement::Ice);
+
+		Sim.CastSpell(1, LeadTarget(Sim, Id));
+		StepSeconds(Sim, 1.5f);
+		Penguin = Sim.FindEnemy(Id);
+		TestTrue(TEXT("빙결도 안 걸린다"), !Penguin || Penguin->FreezeTime <= 0.f);
+
+		// 같은 자리의 꼬마 도깨비는 느려진다 (비교)
+		const int32 ImpId = Sim.DebugSpawnEnemy(EYJJEnemy::Imp, 1200.f);
+		Sim.Disks[0].Cooldown = 0.f;
+		Sim.CastSpell(0, LeadTarget(Sim, ImpId));
+		StepSeconds(Sim, 1.5f);
+		TestTrue(TEXT("보통 몬스터는 느려진다"), Sim.FindEnemy(ImpId) && Sim.FindEnemy(ImpId)->SlowTime > 0.f);
+	}
+
+	// 모든 몬스터가 어느 맵엔가 나온다
+	TSet<EYJJEnemy> Seen;
+	for (int32 Map = 0; Map < YJJMap::NumMaps(); ++Map)
+	{
+		YJJMap::SetActive(Map);
+		for (int32 Wave = 0; Wave < YJJData::NumWaves(); ++Wave)
+		{
+			for (const FYJJWaveGroup& Group : YJJData::Wave(Wave))
+			{
+				Seen.Add(Group.Type);
+				const FYJJEnemyDef& Def = YJJData::Enemy(Group.Type);
+				if (Def.HasSplit())
+				{
+					Seen.Add(Def.SplitInto);
+				}
+			}
+		}
+	}
+	YJJMap::SetActive(0);
+	TestEqual(TEXT("몬스터 15종이 모두 등장"), Seen.Num(), static_cast<int32>(EYJJEnemy::Count));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FYJJAllMapsTest, "YJJDefense.Battle.AllMaps", YJJTests::Flags)
+bool FYJJAllMapsTest::RunTest(const FString& Parameters)
+{
+	using namespace YJJTests;
+
+	// 그 지도에 처음 갈 때쯤 가진 것으로 깰 수 있어야 한다
+	// 들판: 처음 룬·병졸 / 해변: + 바람(가방 5개라 폭발 대신) / 설산: + 마법사 탑
+	const uint32 Start = FYJJRunConfig().RuneMask;
+	const uint32 RuneMasks[] = { Start, Start, Start };
+	const uint32 TowerMasks[] = { 0x07, 0x07, 0x0F };
+	for (int32 Map = 0; Map < YJJMap::NumMaps(); ++Map)
+	{
+		for (const int32 Tier : { 1, 2 })
+		{
+			FYJJRunConfig Config;
+			Config.Map = Map;
+			Config.Tier = Tier;
+			Config.RuneMask = RuneMasks[FMath::Min(Map, 2)];
+			Config.TowerMask = TowerMasks[FMath::Min(Map, 2)];
+			FYJJDefenseSim Sim;
+			const FString Lives = PlayRun(Sim, Config, true);
+			AddInfo(FString::Printf(TEXT("%s %d단계: 결과=%d 웨이브=%d 처치=%d 반응=%d 시간=%.0f초 목숨=[%s]"),
+				YJJMap::Name(Map), Tier, static_cast<int32>(Sim.Result), Sim.WaveIndex + 1, Sim.Kills, Sim.Reactions, Sim.Time, *Lives));
+			if (Tier == 1)
+			{
+				TestEqual(FString::Printf(TEXT("%s 1단계를 봇이 깬다"), YJJMap::Name(Map)), Sim.Result, EYJJRunResult::Victory);
+			}
+		}
+	}
 	return true;
 }
 

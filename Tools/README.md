@@ -8,7 +8,7 @@
 | `BuildAndTest.ps1` | 에디터 타깃 빌드 + 자동화 테스트 (`-NoTest`면 빌드만) |
 | `RunTests.ps1` | `YJJDefense.*` 자동화 테스트(스펠 조합, 원소 반응, 타워, 한 판 전체·밸런스, 수집) |
 | `RunUITest.ps1` | 게임을 띄워 Slate에 마우스·키 이벤트를 넣으며 UI 19단계 확인 → `Saved/Screenshots/UITest_*.png` |
-| `RunSmoke.ps1` | 봇이 한 판(`-Runs N`)을 플레이 → 로그 요약 + `Saved/Screenshots/AutoPlay_*.png`. `-Fresh`면 수집 진행 초기화 |
+| `RunSmoke.ps1` | 봇이 한 판(`-Runs N`)을 플레이 → 로그 요약 + `Saved/Screenshots/AutoPlay_*.png`. `-Map N`으로 지도 지정(0 들판, 1 해변, 2 설산), `-Fresh`면 수집 진행 초기화 |
 
 UI 테스트·스모크는 `-YJJSave=UITest/Smoke` 전용 저장 슬롯을 써서 실제 진행(`Saved/SaveGames/YJJDefense.sav`)은 건드리지 않는다.
 그림은 Pillow로 그린다. `BuildArt.ps1`이 처음 한 번 `Tools/Art/.venv`를 만든다 (Python 3 필요).
@@ -16,9 +16,11 @@ UI 테스트·스모크는 `-YJJSave=UITest/Smoke` 전용 저장 슬롯을 써�
 ## 고칠 곳
 
 - 룬·반응 규칙: `Source/YJJDefense/Game/YJJSpellForge.cpp`, 반응 효과: `YJJDefenseSim.cpp`의 `TriggerReaction`
-- 타워·몬스터·웨이브 수치: `Game/YJJGameData.cpp`
-- 해금 순서·점수: `Meta/YJJSaveGame.cpp`의 `GUnlockTrack`
-- 맵(길, 건설 자리, 마법사, 성문): `Tools/Art/map_data.py` → `BuildArt.ps1` 다시 실행
+- 타워·몬스터 수치, 지도별 웨이브·이름·미리보기 몬스터: `Game/YJJGameData.cpp` (`GEnemies`, `GMaps`)
+- 몬스터 특수 능력: `FYJJEnemyDef`의 `SplitInto/SplitCount`(죽으면 쪼개짐), `Immune`(얼음이면 둔화·빙결 면역)
+- 해금 순서·점수: `Meta/YJJSaveGame.cpp`의 `GUnlockTrack`. 지도는 앞 지도를 깨면 열린다
+- 지도 모양(길, 건설 자리, 마법사, 성문, 테마): `Tools/Art/map_data.py`의 `MAPS` → `BuildArt.ps1` 다시 실행.
+  생성기가 자리·길 겹침과 UI 가림을 검사해 `WARNING`으로 알려 준다. 지도를 늘리면 `GMaps`에도 같은 순서로 추가
 - 그림: `Tools/Art/generate_art.py`의 `make_*`
 
 ## 조작

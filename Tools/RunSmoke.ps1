@@ -4,6 +4,7 @@
 param(
     [string]$EngineDir = "D:\source\repos\UnrealEngine\Engine",
     [int]$Runs = 1,
+    [int]$Map = -1,
     [double]$Speed = 4,
     [double]$ShotInterval = 45,
     [int]$ResX = 1280,
@@ -23,7 +24,7 @@ if ($Fresh) { Remove-Item (Join-Path $ProjectDir "Saved\SaveGames\Smoke.sav") -E
 
 $GameArgs = @(
     "`"$Project`"", "-game", "-windowed", "-ResX=$ResX", "-ResY=$ResY", "-nosplash", "-unattended", "-YJJSave=Smoke",
-    "-ExecCmds=`"yjj.AutoPlay 1, yjj.AutoPlaySpeed $Speed, yjj.AutoPlayExit $Runs, yjj.AutoPlayShotInterval $ShotInterval`"", "-log", "-abslog=`"$Log`""
+    "-ExecCmds=`"yjj.AutoPlay 1, yjj.AutoPlaySpeed $Speed, yjj.AutoPlayExit $Runs, yjj.AutoPlayShotInterval $ShotInterval, yjj.AutoPlayMap $Map`"", "-log", "-abslog=`"$Log`""
 )
 if (-not $Sound) { $GameArgs += "-NoSound" }
 

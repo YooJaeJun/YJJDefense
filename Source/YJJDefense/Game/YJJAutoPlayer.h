@@ -22,6 +22,17 @@ private:
 	void TickSpells(FYJJDefenseSim& Sim);
 	void TickForge(FYJJDefenseSim& Sim);
 
+	// 길을 많이 덮는 자리부터 짓는다 (맵이 바뀌면 다시 계산)
+	void PlanBuildOrder();
+
+	struct FBuildStep
+	{
+		int32 Spot;
+		EYJJTower Preferred;
+	};
+	TArray<FBuildStep> BuildOrder;
+	int32 PlannedMap = INDEX_NONE;
+
 	float ThinkTimer = 0.f;
 	float ForgeTimer = 0.f;
 	int32 BuildIndex = 0;

@@ -3,27 +3,40 @@
 
 namespace
 {
-	struct FBuildStep
-	{
-		int32 Spot;
-		EYJJTower Preferred;
-		EYJJTower Fallback;
+	// 길을 많이 덮는 자리 순서대로 이 병졸을 짓는다
+	const EYJJTower GBuildPattern[] = {
+		EYJJTower::Archer, EYJJTower::Barracks, EYJJTower::Archer, EYJJTower::Bombard, EYJJTower::Mage, EYJJTower::Barracks,
+		EYJJTower::Bombard, EYJJTower::Shrine, EYJJTower::Archer, EYJJTower::Mage, EYJJTower::Archer, EYJJTower::Archer,
 	};
+}
 
-	// 길이 두 번 지나가는 가운데 줄부터 채운다
-	const FBuildStep GBuildOrder[] = {
-		{ 3, EYJJTower::Archer, EYJJTower::Archer },
-		{ 4, EYJJTower::Barracks, EYJJTower::Archer },
-		{ 0, EYJJTower::Archer, EYJJTower::Archer },
-		{ 8, EYJJTower::Bombard, EYJJTower::Archer },
-		{ 5, EYJJTower::Mage, EYJJTower::Archer },
-		{ 9, EYJJTower::Barracks, EYJJTower::Archer },
-		{ 10, EYJJTower::Bombard, EYJJTower::Archer },
-		{ 1, EYJJTower::Shrine, EYJJTower::Archer },
-		{ 6, EYJJTower::Archer, EYJJTower::Archer },
-		{ 2, EYJJTower::Mage, EYJJTower::Archer },
-		{ 7, EYJJTower::Archer, EYJJTower::Archer },
-	};
+void FYJJAutoPlayer::PlanBuildOrder()
+{
+	PlannedMap = YJJMap::GetActive();
+	BuildOrder.Reset();
+
+	const TConstArrayView<FVector2f> Spots = YJJMap::Spots();
+	const float Length = YJJMap::PathLength();
+	TArray<TPair<float, int32>> Scored;
+	for (int32 Spot = 0; Spot < Spots.Num(); ++Spot)
+	{
+		// 사거리 260 안에 들어오는 길 길이. 성문에 가까운 쪽에 조금 더 점수
+		float Score = 0.f;
+		for (float Dist = 0.f; Dist < Length; Dist += 20.f)
+		{
+			if (YJJ::RangeDist(YJJMap::PointAt(Dist), Spots[Spot]) <= 260.f)
+			{
+				Score += 1.f + 0.4f * Dist / Length;
+			}
+		}
+		Scored.Add({ Score, Spot });
+	}
+	Scored.Sort([](const TPair<float, int32>& A, const TPair<float, int32>& B) { return A.Key > B.Key; });
+
+	for (int32 Index = 0; Index < Scored.Num(); ++Index)
+	{
+		BuildOrder.Add({ Scored[Index].Value, GBuildPattern[Index % UE_ARRAY_COUNT(GBuildPattern)] });
+	}
 }
 
 void FYJJAutoPlayer::Reset()
@@ -32,6 +45,7 @@ void FYJJAutoPlayer::Reset()
 	ForgeTimer = 0.f;
 	BuildIndex = 0;
 	ForgeCursor = 0;
+	PlannedMap = INDEX_NONE;
 }
 
 void FYJJAutoPlayer::Tick(FYJJDefenseSim& Sim)
@@ -68,28 +82,30 @@ void FYJJAutoPlayer::Tick(FYJJDefenseSim& Sim)
 
 void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 {
+	if (PlannedMap != YJJMap::GetActive() || BuildOrder.IsEmpty())
+	{
+		PlanBuildOrder();
+		BuildIndex = 0;
+	}
+
 	// 이미 지어진 자리는 건너뛴다
-	while (BuildIndex < UE_ARRAY_COUNT(GBuildOrder) && Sim.Towers.IsValidIndex(GBuildOrder[BuildIndex].Spot) && Sim.Towers[GBuildOrder[BuildIndex].Spot].bBuilt)
+	while (BuildOrder.IsValidIndex(BuildIndex) && Sim.Towers[BuildOrder[BuildIndex].Spot].bBuilt)
 	{
 		BuildIndex++;
 	}
 
 	int32 BuildCost = MAX_int32;
 	EYJJTower BuildType = EYJJTower::Archer;
-	if (BuildIndex < UE_ARRAY_COUNT(GBuildOrder))
+	if (BuildOrder.IsValidIndex(BuildIndex))
 	{
-		const FBuildStep& Step = GBuildOrder[BuildIndex];
-		BuildType = Sim.HasTower(Step.Preferred) ? Step.Preferred : Step.Fallback;
+		BuildType = BuildOrder[BuildIndex].Preferred;
 		if (!Sim.HasTower(BuildType))
 		{
-			// 들고 나온 것 중 아무거나
-			for (int32 Index = 0; Index < static_cast<int32>(EYJJTower::Count); ++Index)
+			// 못 들고 나왔으면 궁수, 그것도 없으면 아무거나
+			BuildType = EYJJTower::Archer;
+			for (int32 Index = 0; Index < static_cast<int32>(EYJJTower::Count) && !Sim.HasTower(BuildType); ++Index)
 			{
-				if (Sim.HasTower(static_cast<EYJJTower>(Index)))
-				{
-					BuildType = static_cast<EYJJTower>(Index);
-					break;
-				}
+				BuildType = static_cast<EYJJTower>(Index);
 			}
 		}
 		BuildCost = YJJData::Tower(BuildType).Levels[0].Cost;
@@ -114,7 +130,7 @@ void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 	{
 		if (Sim.Gold >= BuildCost)
 		{
-			Sim.BuildTower(GBuildOrder[BuildIndex].Spot, BuildType);
+			Sim.BuildTower(BuildOrder[BuildIndex].Spot, BuildType);
 		}
 	}
 	else if (UpgradeSpot != INDEX_NONE && Sim.Gold >= UpgradeCost)

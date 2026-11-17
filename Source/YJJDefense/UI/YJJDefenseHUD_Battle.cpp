@@ -7,9 +7,10 @@
 #include "UI/YJJUIStyle.h"
 #include "YJJDefenseGameMode.h"
 
-void AYJJDefenseHUD::DrawDimmedMap(float Darkness)
+void AYJJDefenseHUD::DrawDimmedMap(float Darkness, int32 Map)
 {
-	DrawSprite(MapTexture, FVector2f(YJJ::ViewW * 0.5f, YJJ::ViewH * 0.5f), FVector2f(YJJ::ViewW, YJJ::ViewH));
+	Map = Map == INDEX_NONE ? YJJMap::GetActive() : Map;
+	DrawSprite(MapTextures[FMath::Clamp(Map, 0, static_cast<int32>(UE_ARRAY_COUNT(MapTextures)) - 1)], FVector2f(YJJ::ViewW * 0.5f, YJJ::ViewH * 0.5f), FVector2f(YJJ::ViewW, YJJ::ViewH));
 	if (Darkness > 0.f)
 	{
 		DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, Darkness));
@@ -401,8 +402,8 @@ void AYJJDefenseHUD::DrawTopBar()
 	DrawSprite(FlagIcon, FVector2f(374.f, Y + H * 0.5f - 2.f), FVector2f(38.f, 38.f));
 	DrawLabel(FString::Printf(TEXT("웨이브 %d/%d"), FMath::Max(Sim.WaveIndex + 1, 0), YJJData::NumWaves()), 400.f, Y + H * 0.5f - 3.f, 30.f, YJJUI::Ink);
 
-	DrawPanel(586.f, Y, 112.f, H, YJJUI::Yellow);
-	DrawLabel(FString::Printf(TEXT("%d단계"), Sim.Config.Tier), 642.f, Y + H * 0.5f - 3.f, 28.f, YJJUI::Ink, EAlign::Center);
+	DrawPanel(586.f, Y, 250.f, H, YJJUI::Yellow);
+	DrawLabel(FString::Printf(TEXT("%s · %d단계"), YJJMap::Name(Sim.Config.Map), Sim.Config.Tier), 711.f, Y + H * 0.5f - 3.f, 26.f, YJJUI::Ink, EAlign::Center);
 
 	// 오른쪽: 일시정지, 배속
 	const bool bPauseHover = DrawButton(1774.f, Y, 60.f, H, YJJUI::Sky, EAction::Pause);
@@ -597,7 +598,10 @@ FString AYJJDefenseHUD::DescribeWave(int32 WaveIndex) const
 	{
 		if (Counts[Type] > 0)
 		{
-			Parts.Add(FString::Printf(TEXT("%s x%d"), YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Name, Counts[Type]));
+			const FString Traits = YJJData::EnemyTraits(static_cast<EYJJEnemy>(Type));
+			Parts.Add(Traits.IsEmpty()
+				? FString::Printf(TEXT("%s x%d"), YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Name, Counts[Type])
+				: FString::Printf(TEXT("%s x%d  (%s)"), YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Name, Counts[Type], *Traits));
 		}
 	}
 	return FString::Join(Parts, TEXT("\n"));
