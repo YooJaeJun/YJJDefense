@@ -9,8 +9,11 @@ namespace YJJData
 	YJJDEFENSE_API const FYJJTowerDef& Tower(EYJJTower Tower);
 	YJJDEFENSE_API const FYJJEnemyDef& Enemy(EYJJEnemy Enemy);
 
+	// 지금 맵(YJJMap::SetActive)의 웨이브
 	YJJDEFENSE_API int32 NumWaves();
 	YJJDEFENSE_API TConstArrayView<FYJJWaveGroup> Wave(int32 Index);
+	// 몬스터 특수 능력을 짧은 말로 ("갑옷", "쪼개짐"…). 없으면 빈 문자열
+	YJJDEFENSE_API FString EnemyTraits(EYJJEnemy Enemy);
 
 	YJJDEFENSE_API const TCHAR* ElementName(EYJJElement Element);
 	YJJDEFENSE_API FLinearColor ElementColor(EYJJElement Element);
@@ -43,9 +46,19 @@ namespace YJJData
 	inline constexpr float WizardCooldownScale[MaxWizardLevel + 1] = { 1.f, 0.92f, 0.84f, 0.76f };
 }
 
-// 맵 (Tools/Art/map_data.py가 원본. 배경 그림과 같은 값으로 Game/YJJMap01.inl을 생성한다)
+// 맵 (Tools/Art/map_data.py가 원본. 배경 그림과 같은 값으로 Game/YJJMaps.inl을 생성한다).
+// 한 번에 한 판만 돌기 때문에 "지금 맵"을 전역으로 둔다. FYJJDefenseSim::Reset이 고른다
 namespace YJJMap
 {
+	YJJDEFENSE_API int32 NumMaps();
+	YJJDEFENSE_API void SetActive(int32 Map);
+	YJJDEFENSE_API int32 GetActive();
+	YJJDEFENSE_API const TCHAR* Name(int32 Map);
+	YJJDEFENSE_API const TCHAR* Desc(int32 Map);
+	YJJDEFENSE_API const TCHAR* Texture(int32 Map);
+	// 이 맵에 처음 나오는 몬스터 (준비 화면 미리보기)
+	YJJDEFENSE_API TConstArrayView<EYJJEnemy> Showcase(int32 Map);
+
 	YJJDEFENSE_API TConstArrayView<FVector2f> Path();
 	YJJDEFENSE_API float PathLength();
 	// 길 위 Dist 지점. Lateral은 진행 방향의 오른쪽으로 벗어난 거리

@@ -30,12 +30,18 @@ void AYJJDefenseHUD::BeginPlay()
 {
 	Super::BeginPlay();
 
-	static const TCHAR* EnemyNames[] = { TEXT("Imp"), TEXT("Chicken"), TEXT("Potato"), TEXT("Toast"), TEXT("Mushroom"), TEXT("PuddingKing") };
+	static const TCHAR* EnemyNames[] = { TEXT("Imp"), TEXT("Chicken"), TEXT("Potato"), TEXT("Toast"), TEXT("Mushroom"), TEXT("PuddingKing"),
+		TEXT("Crab"), TEXT("Jellyfish"), TEXT("Coconut"), TEXT("CocoKid"), TEXT("KingCrab"), TEXT("Snowman"), TEXT("Snowball"), TEXT("Penguin"), TEXT("Yeti") };
+	static_assert(UE_ARRAY_COUNT(EnemyNames) == static_cast<int32>(EYJJEnemy::Count));
 	static const TCHAR* TowerNames[] = { TEXT("Archer"), TEXT("Barracks"), TEXT("Bombard"), TEXT("Mage"), TEXT("Shrine") };
 	static const TCHAR* RuneNames[] = { TEXT("Fire"), TEXT("Ice"), TEXT("Water"), TEXT("Lightning"), TEXT("Poison"), TEXT("Wind"), TEXT("Explosion"), TEXT("Chain"), TEXT("Split") };
 	static const TCHAR* BallNames[] = { TEXT("Arcane"), TEXT("Fire"), TEXT("Ice"), TEXT("Water"), TEXT("Lightning"), TEXT("Poison"), TEXT("Wind") };
 
-	MapTexture = LoadTex(TEXT("T_Map01"));
+	for (int32 Map = 0; Map < FMath::Min(YJJMap::NumMaps(), static_cast<int32>(UE_ARRAY_COUNT(MapTextures))); ++Map)
+	{
+		MapTextures[Map] = LoadTex(YJJMap::Texture(Map));
+		MapThumbs[Map] = LoadTex(FString(YJJMap::Texture(Map)) + TEXT("_Thumb"));
+	}
 	for (int32 Type = 0; Type < UE_ARRAY_COUNT(EnemyNames); ++Type)
 	{
 		for (int32 Frame = 0; Frame < 2; ++Frame)
@@ -503,6 +509,15 @@ void AYJJDefenseHUD::OnSimEvents(TConstArrayView<FYJJSimEvent> Events)
 			AddText(Event.Pos + FVector2f(0.f, -52.f), FString::Printf(TEXT("+%d"), Event.Int), 24.f, YJJUI::Yellow, 0.8f);
 			break;
 
+		case EYJJSimEvent::EnemySplit:
+			AddFx(EFx::Puff, Event.Pos + Up, 0.4f, 110.f, FLinearColor::White);
+			AddText(Event.Pos + FVector2f(0.f, -70.f), FString::Printf(TEXT("%d개로 쪼개짐!"), Event.Int), 24.f, YJJUI::Orange, 0.9f);
+			break;
+
+		case EYJJSimEvent::EnemyImmune:
+			AddText(Event.Pos + FVector2f(0.f, -76.f), TEXT("안 얼어!"), 22.f, YJJUI::Sky, 0.8f);
+			break;
+
 		case EYJJSimEvent::EnemyLeaked:
 			AddText(Event.Pos + FVector2f(-40.f, -80.f), FString::Printf(TEXT("목숨 -%d"), Event.Int), 34.f, YJJUI::Red, 1.2f);
 			AddFx(EFx::Burst, Event.Pos + Up, 0.3f, 110.f, YJJUI::Red);
@@ -710,6 +725,14 @@ void AYJJDefenseHUD::DoAction(const FHitRegion& Region, bool bRightButton)
 		if (Save)
 		{
 			Save->SelectedTier = FMath::Clamp(Save->SelectedTier + (Region.Action == EAction::TierNext ? 1 : -1), 1, Save->MaxTier);
+			Game->SaveProgress();
+		}
+		break;
+	case EAction::MapPrev:
+	case EAction::MapNext:
+		if (Save)
+		{
+			Save->SelectedMap = FMath::Clamp(Save->SelectedMap + (Region.Action == EAction::MapNext ? 1 : -1), 0, Save->UnlockedMaps - 1);
 			Game->SaveProgress();
 		}
 		break;

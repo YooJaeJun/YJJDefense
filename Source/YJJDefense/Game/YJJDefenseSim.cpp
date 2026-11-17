@@ -39,6 +39,8 @@ void FYJJDefenseSim::Reset(const FYJJRunConfig& InConfig)
 {
 	Config = InConfig;
 	Config.Tier = FMath::Max(Config.Tier, 1);
+	Config.Map = FMath::Clamp(Config.Map, 0, YJJMap::NumMaps() - 1);
+	YJJMap::SetActive(Config.Map);
 
 	Result = EYJJRunResult::Playing;
 	Time = 0.f;
@@ -62,6 +64,7 @@ void FYJJDefenseSim::Reset(const FYJJRunConfig& InConfig)
 	Events.Reset();
 	CombosCast.Reset();
 	SpawnQueue.Reset();
+	PendingSplits.Reset();
 	Towers.Reset();
 	Towers.SetNum(YJJMap::Spots().Num());
 	Rng.Initialize(Config.Seed);
@@ -99,6 +102,7 @@ void FYJJDefenseSim::Step()
 	StepProjectiles();
 	StepZones();
 
+	SpawnSplits();
 	Enemies.RemoveAll([](const FYJJEnemyState& Enemy) { return !Enemy.IsAlive(); });
 
 	if (Lives <= 0)
@@ -583,7 +587,47 @@ void FYJJDefenseSim::DamageEnemy(FYJJEnemyState& Enemy, float Amount, bool bMagi
 		FYJJSimEvent& Event = Emit(EYJJSimEvent::EnemyKilled, Enemy.Pos);
 		Event.Int = Def.Gold;
 		Event.Value = static_cast<float>(Enemy.Type);
+
+		if (Def.HasSplit())
+		{
+			PendingSplits.Add({ Def.SplitInto, Def.SplitCount, Enemy.Dist, Enemy.Lateral, Enemy.Pos });
+		}
 	}
+}
+
+void FYJJDefenseSim::SpawnSplits()
+{
+	for (const FSplit& Split : PendingSplits)
+	{
+		for (int32 Index = 0; Index < Split.Count; ++Index)
+		{
+			// 앞뒤·좌우로 조금씩 벌려 놓는다
+			FYJJEnemyState& Kid = SpawnEnemy(Split.Type);
+			const float Side = Split.Count > 1 ? (static_cast<float>(Index) / (Split.Count - 1) - 0.5f) * 2.f : 0.f;
+			Kid.Dist = FMath::Max(Split.Dist - 10.f * Index, 0.f);
+			Kid.Lateral = FMath::Clamp(Split.Lateral + Side * 16.f, -26.f, 26.f);
+			Kid.Pos = YJJMap::PointAt(Kid.Dist, Kid.Lateral, &Kid.Dir);
+			Kid.HitFlash = 0.12f;
+		}
+		FYJJSimEvent& Event = Emit(EYJJSimEvent::EnemySplit, Split.Pos);
+		Event.Value = static_cast<float>(Split.Type);
+		Event.Int = Split.Count;
+	}
+	PendingSplits.Reset();
+}
+
+bool FYJJDefenseSim::ResistsChill(FYJJEnemyState& Enemy)
+{
+	if (YJJData::Enemy(Enemy.Type).Immune != EYJJElement::Ice)
+	{
+		return false;
+	}
+	if (Enemy.ImmuneTextCooldown <= 0.f)
+	{
+		Enemy.ImmuneTextCooldown = 1.5f;
+		Emit(EYJJSimEvent::EnemyImmune, Enemy.Pos).Element = EYJJElement::Ice;
+	}
+	return true;
 }
 
 void FYJJDefenseSim::AddBurn(FYJJEnemyState& Enemy, float Dps, float Duration)
@@ -600,6 +644,10 @@ void FYJJDefenseSim::AddPoison(FYJJEnemyState& Enemy, float Dps, float Duration)
 
 void FYJJDefenseSim::AddSlow(FYJJEnemyState& Enemy, float Factor, float Duration)
 {
+	if (ResistsChill(Enemy))
+	{
+		return;
+	}
 	if (YJJData::Enemy(Enemy.Type).bBoss)
 	{
 		Factor = FMath::Lerp(1.f, Factor, 0.5f);
@@ -615,6 +663,10 @@ void FYJJDefenseSim::AddStun(FYJJEnemyState& Enemy, float Duration)
 
 void FYJJDefenseSim::AddFreeze(FYJJEnemyState& Enemy, float Duration)
 {
+	if (ResistsChill(Enemy))
+	{
+		return;
+	}
 	Enemy.FreezeTime = FMath::Max(Enemy.FreezeTime, Duration * (YJJData::Enemy(Enemy.Type).bBoss ? BossControlScale : 1.f));
 }
 
@@ -691,6 +743,7 @@ void FYJJDefenseSim::StepEnemies()
 		Enemy.StunTime = FMath::Max(Enemy.StunTime - Dt, 0.f);
 		Enemy.FreezeTime = FMath::Max(Enemy.FreezeTime - Dt, 0.f);
 		Enemy.VulnTime = FMath::Max(Enemy.VulnTime - Dt, 0.f);
+		Enemy.ImmuneTextCooldown = FMath::Max(Enemy.ImmuneTextCooldown - Dt, 0.f);
 
 		// 지속 피해
 		if (Enemy.BurnTime > 0.f)

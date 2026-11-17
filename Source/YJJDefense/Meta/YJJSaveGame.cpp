@@ -85,6 +85,8 @@ namespace YJJProgression
 		}
 		SaveGame.SelectedRunes = KeepLowestBits(SaveGame.SelectedRunes, MaxBagRunes);
 		SaveGame.SelectedTowers = KeepLowestBits(SaveGame.SelectedTowers, MaxBagTowers);
+		SaveGame.UnlockedMaps = FMath::Clamp(SaveGame.UnlockedMaps, 1, YJJMap::NumMaps());
+		SaveGame.SelectedMap = FMath::Clamp(SaveGame.SelectedMap, 0, SaveGame.UnlockedMaps - 1);
 		SaveGame.MaxTier = FMath::Clamp(SaveGame.MaxTier, 1, MaxTier);
 		SaveGame.SelectedTier = FMath::Clamp(SaveGame.SelectedTier, 1, SaveGame.MaxTier);
 	}
@@ -162,6 +164,10 @@ namespace YJJProgression
 		if (Stats.bVictory)
 		{
 			SaveGame.Wins++;
+			if (Stats.Map + 1 == SaveGame.UnlockedMaps && SaveGame.UnlockedMaps < YJJMap::NumMaps())
+			{
+				Reward.NewMap = SaveGame.UnlockedMaps++;
+			}
 			if (Stats.Tier >= SaveGame.MaxTier && SaveGame.MaxTier < MaxTier)
 			{
 				SaveGame.MaxTier++;

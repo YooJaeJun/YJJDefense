@@ -42,6 +42,13 @@ public:
 	UPROPERTY()
 	int32 SelectedTier = 1;
 
+	// 열린 지도 수 (앞 지도를 깨면 다음 지도가 열린다)
+	UPROPERTY()
+	int32 UnlockedMaps = 1;
+
+	UPROPERTY()
+	int32 SelectedMap = 0;
+
 	UPROPERTY()
 	int32 RunsPlayed = 0;
 
@@ -62,6 +69,7 @@ struct FYJJUnlock
 
 struct FYJJRunStats
 {
+	int32 Map = 0;
 	bool bVictory = false;
 	int32 Stars = 0;
 	int32 WavesCleared = 0;
@@ -80,6 +88,7 @@ struct FYJJRunReward
 	int32 TotalPoints = 0;
 	TArray<FYJJUnlock> NewUnlocks;
 	bool bNewTier = false;
+	int32 NewMap = INDEX_NONE;   // 이번에 열린 지도
 };
 
 namespace YJJProgression

@@ -72,4 +72,4 @@ DevLog/Output/
 
 ### 아트용 파이썬 가상환경, 검토용 모음 시트
 Tools/Art/.venv/
-Tools/Art/Generated/_sheet.png
+Tools/Art/Generated/_sheet*.png

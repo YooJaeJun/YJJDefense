@@ -29,6 +29,7 @@ struct FYJJEnemyState
 	float FreezeTime = 0.f;
 	float VulnTime = 0.f;
 	float VulnMult = 1.f;
+	float ImmuneTextCooldown = 0.f;   // "면역!" 표시를 너무 자주 띄우지 않게
 
 	int32 BlockerId = INDEX_NONE;  // 길을 막고 있는 병졸
 	float AttackTimer = 0.f;
@@ -136,6 +137,8 @@ enum class EYJJSimEvent : uint8
 {
 	EnemyKilled,     // Pos, Int=골드, Value=몬스터 종류
 	EnemyLeaked,     // Int=잃은 목숨
+	EnemySplit,      // Pos, Value=쪼개진 몬스터 종류, Int=개수
+	EnemyImmune,     // Pos, Element=막아 낸 원소
 	TowerBuilt,      // Pos
 	TowerUpgraded,   // Pos
 	TowerSold,       // Pos, Int=환불
@@ -176,6 +179,7 @@ enum class EYJJRunResult : uint8
 
 struct FYJJRunConfig
 {
+	int32 Map = 0;
 	int32 Tier = 1;
 	int32 Seed = 1;
 	uint32 RuneMask = 0x1F;   // 들고 나온 룬
@@ -263,6 +267,9 @@ private:
 
 	void StartWave(int32 Index);
 	FYJJEnemyState& SpawnEnemy(EYJJEnemy Type);
+	void SpawnSplits();
+	// 둔화·빙결을 막는 몬스터면 true (표시도 띄운다)
+	bool ResistsChill(FYJJEnemyState& Enemy);
 	void StepWaves();
 	void StepEnemies();
 	void StepSoldiers();
@@ -294,6 +301,17 @@ private:
 
 	FRandomStream Rng;
 	TArray<FSpawn> SpawnQueue;   // 뒤에서부터 꺼낸다 (시간 내림차순)
+
+	// 죽어서 쪼개질 몬스터. 적 배열을 도는 중에 늘리면 참조가 깨지므로 스텝 끝에 한꺼번에 만든다
+	struct FSplit
+	{
+		EYJJEnemy Type;
+		int32 Count;
+		float Dist;
+		float Lateral;
+		FVector2f Pos;
+	};
+	TArray<FSplit> PendingSplits;
 	float WaveTime = 0.f;
 	float HPScale = 1.f;
 	int32 NextId = 1;

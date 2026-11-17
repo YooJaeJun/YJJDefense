@@ -22,6 +22,10 @@ static TAutoConsoleVariable<int32> CVarAutoPlayExit(
 	TEXT("yjj.AutoPlayExit"), 0,
 	TEXT("1 이상이면 오토플레이로 그 판 수만큼 끝낸 뒤 스크린샷을 남기고 게임을 종료한다"));
 
+static TAutoConsoleVariable<int32> CVarAutoPlayMap(
+	TEXT("yjj.AutoPlayMap"), -1,
+	TEXT("0 이상이면 오토플레이가 이 지도로 출전한다 (잠겨 있어도 연다)"));
+
 static TAutoConsoleVariable<float> CVarAutoPlayShotInterval(
 	TEXT("yjj.AutoPlayShotInterval"), 45.f,
 	TEXT("오토플레이 중 스크린샷 간격 (게임 시간 초). 0이면 찍지 않는다"));
@@ -78,6 +82,7 @@ void AYJJDefenseGameMode::StartRun()
 	YJJProgression::SanitizeSelection(*SaveGame);
 
 	FYJJRunConfig Config;
+	Config.Map = SaveGame->SelectedMap;
 	Config.Tier = SaveGame->SelectedTier;
 	Config.Seed = 1000 + SaveGame->RunsPlayed;
 	Config.RuneMask = static_cast<uint32>(SaveGame->SelectedRunes);
@@ -107,7 +112,7 @@ void AYJJDefenseGameMode::StartRun()
 	{
 		HUD->OnRunStarted();
 	}
-	UE_LOG(LogYJJDefense, Display, TEXT("[Run] start tier=%d runes=0x%X towers=0x%X"), Config.Tier, Config.RuneMask, Config.TowerMask);
+	UE_LOG(LogYJJDefense, Display, TEXT("[Run] start map=%d tier=%d runes=0x%X towers=0x%X"), Config.Map, Config.Tier, Config.RuneMask, Config.TowerMask);
 	YJJAudio::Play(this, TEXT("SFX_Click"));
 	SaveProgress();
 }
@@ -142,6 +147,7 @@ void AYJJDefenseGameMode::FinishRun()
 	LastStats.bVictory = Sim.Result == EYJJRunResult::Victory;
 	LastStats.Stars = Sim.Stars();
 	LastStats.Tier = Sim.Config.Tier;
+	LastStats.Map = Sim.Config.Map;
 	LastStats.CombosCast = Sim.CombosCast;
 	// 끝까지 버틴 웨이브 수 (지면 진행 중이던 웨이브는 빼고)
 	LastStats.WavesCleared = LastStats.bVictory ? YJJData::NumWaves() : FMath::Max(Sim.WaveIndex, 0);
@@ -161,9 +167,9 @@ void AYJJDefenseGameMode::FinishRun()
 	}
 
 	Screen = EYJJScreen::Result;
-	UE_LOG(LogYJJDefense, Display, TEXT("[Run] %s tier=%d lives=%d stars=%d waves=%d kills=%d casts=%d reactions=%d combos=%d(+%d) points=+%d unlocks=%d"),
-		LastStats.bVictory ? TEXT("VICTORY") : TEXT("DEFEAT"), LastStats.Tier, Sim.Lives, LastStats.Stars, LastStats.WavesCleared, Sim.Kills, Sim.SpellsCast,
-		Sim.Reactions, Sim.CombosCast.Num(), LastReward.NewCombos, LastReward.TotalPoints, LastReward.NewUnlocks.Num());
+	UE_LOG(LogYJJDefense, Display, TEXT("[Run] %s map=%d tier=%d lives=%d stars=%d waves=%d kills=%d casts=%d reactions=%d combos=%d(+%d) points=+%d unlocks=%d newmap=%d"),
+		LastStats.bVictory ? TEXT("VICTORY") : TEXT("DEFEAT"), LastStats.Map, LastStats.Tier, Sim.Lives, LastStats.Stars, LastStats.WavesCleared, Sim.Kills, Sim.SpellsCast,
+		Sim.Reactions, Sim.CombosCast.Num(), LastReward.NewCombos, LastReward.TotalPoints, LastReward.NewUnlocks.Num(), LastReward.NewMap);
 }
 
 void AYJJDefenseGameMode::Tick(float DeltaSeconds)
@@ -291,6 +297,12 @@ void AYJJDefenseGameMode::TickAutoPlay(float DeltaSeconds)
 		}
 		if (AutoPlayScreenTime > 2.5f)
 		{
+			const int32 ForcedMap = CVarAutoPlayMap.GetValueOnGameThread();
+			if (SaveGame && ForcedMap >= 0)
+			{
+				SaveGame->UnlockedMaps = FMath::Max(SaveGame->UnlockedMaps, FMath::Min(ForcedMap + 1, YJJMap::NumMaps()));
+				SaveGame->SelectedMap = FMath::Min(ForcedMap, YJJMap::NumMaps() - 1);
+			}
 			StartRun();
 			Speed = CVarAutoPlaySpeed.GetValueOnGameThread();
 			AutoPlayScreenTime = 0.f;
