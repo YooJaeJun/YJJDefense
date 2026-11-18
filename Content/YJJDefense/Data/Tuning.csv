@@ -1,0 +1,126 @@
+﻿Name,Value,Note
+StartGold,270,시작 골드
+StartLives,20,성문 목숨
+WaveGap,22,웨이브가 다 나온 뒤 다음 웨이브까지(초)
+WaveGapWhenClear,5,적을 다 잡았을 때 다음 웨이브까지 최대(초)
+EarlyCallMinTime,1,남은 시간이 이보다 길 때만 일찍 부른 보너스
+EarlyCallGoldPerSecond,1,일찍 부르면 남은 1초당 골드
+SellRefund,0.6,팔 때 돌려받는 비율
+TierHPStep,0.3,도전 단계마다 몬스터 체력 증가
+WaveHPStep,0.07,웨이브마다 몬스터 체력 증가
+Star3Lives,18,별 셋 최소 목숨
+Star2Lives,8,별 둘 최소 목숨
+AuraDuration,6,적에게 묻은 원소가 남는 시간(초)
+EnemyLateralSpread,20,몬스터가 길 가운데서 벗어나는 최대 거리
+EnemyFirstAttackDelay,0.5,병졸과 처음 붙었을 때 공격 간격 비율
+HitFlashTime,0.12,맞았을 때 번쩍이는 시간
+HitFlashMinDamage,2,이보다 작은 피해(도트)는 번쩍이지 않는다
+HealInterval,1,응원 버섯 회복 간격(초)
+HealRadius,135,응원 버섯 회복 반경
+BossControlScale,0.35,보스가 받는 기절·빙결·밀쳐내기 배율
+BossSlowScale,0.5,보스가 받는 둔화 세기 배율
+ImmuneTextCooldown,1.5,"""안 얼어!"" 표시 간격"
+SplitBackStep,10,쪼개진 몬스터끼리 앞뒤 간격
+SplitSideSpread,16,쪼개진 몬스터 좌우 벌림
+SplitLateralLimit,26,쪼개진 몬스터가 길에서 벗어나는 최대 거리
+SoldierRespawn,10,쓰러진 병졸이 다시 나오는 시간(초)
+SoldierSpeed,95,병졸 이동 속도
+SoldierEngageRange,78,병졸이 몬스터를 잡으러 가는 거리 (집결지 기준)
+SoldierReleaseSlack,30,이만큼 더 멀어지면 놓아준다
+SoldierBlockDistance,46,이 거리 안이면 몬스터를 막아선다
+SoldierArriveDistance,6,목표 자리에 도착한 것으로 치는 거리
+SoldierAttackDistance,30,때릴 수 있는 거리
+SoldierHomeArrive,3,집결지에 도착한 것으로 치는 거리
+SoldierIdleHealDelay,2,쉬기 시작해서 회복까지(초)
+SoldierIdleHealRate,0.12,쉬는 동안 초당 회복 (최대 체력 비율)
+SoldierFrontGap,14,몬스터 앞에 서는 간격
+SoldierSlotSpread,0.35,싸울 때 병졸 자리 벌림 비율
+SoldierAttackAnim,0.22,찌르기 포즈 시간
+SoldierSlot0X,-24,병졸 1 집결지 오프셋
+SoldierSlot0Y,-8,
+SoldierSlot1X,24,병졸 2
+SoldierSlot1Y,-4,
+SoldierSlot2X,0,병졸 3
+SoldierSlot2Y,16,
+TowerFirstShotDelay,0.4,지은 직후 첫 사격까지(초)
+TowerBuildAnim,0.35,지을 때 통통 튀는 시간
+TowerFireAnim,0.25,쏠 때 움찔하는 시간
+TowerMuzzleHeight,92,타워 발사 위치 높이
+ShrinePowerScale,3,정령 제단 원소 효과·반응 세기 = 피해 x 이것
+SpellBaseDamage,46,스펠 기본 피해
+SpellBaseRadius,48,스펠 기본 반경
+SpellBaseCooldown,7,스펠 기본 재사용(초)
+SpellBallSpeed,1100,스펠 공 속도
+SpellBallMinTime,0.28,스펠 공 최소 비행 시간
+SpellBallStagger,0.05,분열 공끼리 출발 간격
+SpellBallArc,90,스펠 공 포물선 높이
+SpellBallArcStep,25,분열 공마다 더 높게
+SocketChangeCooldown,2.5,전투 중 룬을 바꾸면 식는 시간
+WizardMuzzleX,-26,마법사 지팡이 끝 (발 기준)
+WizardMuzzleY,-118,
+WizardCastAnim,0.35,시전 포즈 시간
+SplitTargetMinScale,0.8,분열 공이 노리는 적: 반경 x 이것보다 먼 적
+SplitTargetMaxDistance,320,분열 공이 노리는 적 최대 거리
+SplitScatterRadius,105,노릴 적이 없으면 흩뿌리는 반경
+SplitScatterJitter,0.3,흩뿌릴 때 각도 흔들림(라디안)
+ChainHopDamage,0.7,연쇄 첫 번째 옮겨 붙을 때 피해 비율
+ChainHopFalloff,0.88,옮겨 붙을 때마다 줄어드는 비율
+ChainSearchRange,240,연쇄가 옮겨 붙는 최대 거리
+WizardCost1,140,마력 강화 비용 Lv2
+WizardCost2,240,Lv3
+WizardCost3,380,Lv4
+WizardDamage1,1.5,강화 후 스펠 피해 배율 Lv2
+WizardDamage2,2.1,Lv3
+WizardDamage3,2.9,Lv4
+WizardCooldown1,0.92,강화 후 재사용 배율 Lv2
+WizardCooldown2,0.84,Lv3
+WizardCooldown3,0.76,Lv4
+ForgeTwoRuneCooldown,1.5,룬 둘이면 재사용 추가(초)
+ForgeAmplifyDamage,1.8,같은 원소 둘: 피해 배율
+ForgeAmplifyRadius,1.35,같은 원소 둘: 반경 배율
+ForgeArcaneDamage,1.3,원소 없는 스펠 피해 배율
+ForgeExplodeRadius1,85,폭발 하나: 반경 추가
+ForgeExplodeRadius2,150,폭발 둘: 반경 추가
+ForgeExplodeDamage1,1.15,폭발 하나: 피해 배율
+ForgeExplodeDamage2,1.5,폭발 둘: 피해 배율
+ForgeExplodeCooldown,1,폭발 룬마다 재사용 추가(초)
+ForgeChainJumps1,3,연쇄 하나: 옮겨 붙는 수
+ForgeChainJumps2,7,연쇄 둘
+ForgeChainExplodeRadius,70,폭발+연쇄: 옮겨 붙을 때 폭발 반경
+ForgeChainCooldown,0.5,연쇄 룬마다 재사용 추가(초)
+ForgeSplitProjectiles1,3,분열 하나: 공 수
+ForgeSplitProjectiles2,5,분열 둘
+ForgeSplitDamage1,0.62,분열 하나: 공 하나 피해 배율
+ForgeSplitDamage2,0.5,분열 둘
+ForgeSplitCooldown,0.5,분열 룬마다 재사용 추가(초)
+ForgeSplitChainJumps,2,분열+연쇄: 공마다 옮겨 붙는 수
+ZoneTickInterval,0.25,장판 효과 간격(초)
+ZoneSlowTime,0.5,장판 둔화 유지
+ZoneBurnTime,1.5,장판 화상 유지
+ZonePoisonTime,2,장판 독 유지
+MaxBagRunes,5,가방에 들고 나가는 룬 수
+MaxBagTowers,4,출전하는 병졸 종류 수
+MaxTier,9,도전 단계 최대
+WavesPerPoint,2,버틴 웨이브 이만큼마다 수집 점수 1
+VictoryPoints,3,승리 수집 점수
+MaxComboPoints,6,한 판에 새 조합으로 받는 점수 최대
+ResultDelay,2.2,승패 연출 뒤 결과 화면까지(초)
+MaxStepBacklog,0.25,한 프레임에 따라잡는 최대 게임 시간(초)
+FastSpeed,2,배속 버튼
+RunSeedBase,1000,판마다 난수 씨앗 = 이것 + 플레이 판 수
+SoundMinInterval,0.06,같은 효과음 최소 간격(초)
+BotThinkInterval,0.25,봇 판단 간격(초)
+BotFirstWaveDelay,2,봇이 첫 웨이브를 부르기 전 준비 시간
+BotCallWhenTimerBelow,10,다음 웨이브까지 이보다 적게 남으면 부른다
+BotForceBuildCount,4,처음 이만큼은 무조건 새로 짓는다
+BotWizardMinWave,2,이 웨이브부터 마력 강화
+BotWizardGoldReserve,60,마력 강화 후에도 남길 골드
+BotSpellMinDist,120,입구에 너무 가까운 적은 노리지 않는다
+BotSpellMinRadius,90,몰린 적을 셀 때 최소 반경
+BotBossWeight,4,보스 한 마리 = 일반 몇 마리
+BotFrontWeight,0.0005,앞선 적 가산점 (길 거리당)
+BotLeadTime,0.45,스펠이 날아가는 동안 적이 걸어갈 시간
+BotForgeInterval,18,룬을 바꿔 새 조합을 시험하는 간격(초)
+BotCoverageRange,260,자리 점수: 이 사거리 안의 길
+BotCoverageStep,20,자리 점수: 길을 재는 간격
+BotCoverageGateBias,0.4,자리 점수: 성문에 가까운 길 가산

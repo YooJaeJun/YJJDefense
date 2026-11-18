@@ -1,0 +1,6 @@
+﻿Name,NameKey,DescKey,Art,Magic,HitsAir,Projectile,ShotSpeed,ShotTime,ShotArcRatio,ShotArcHeight,Homing,LeadTarget,Cost1,Cost2,Cost3,Damage1,Damage2,Damage3,Interval1,Interval2,Interval3,Range1,Range2,Range3,Splash1,Splash2,Splash3,SoldierHP1,SoldierHP2,SoldierHP3,SoldierArmor1,SoldierArmor2,SoldierArmor3,Note
+Archer,Tower.Archer.Name,Tower.Archer.Desc,Archer,False,True,Arrow,720,0.14,0.12,0,True,False,70,110,160,13,21,32,0.7,0.6,0.5,270,295,320,0,0,0,0,0,0,0,0,0,ShotTime = 최소 비행 시간
+Barracks,Tower.Barracks.Name,Tower.Barracks.Desc,Barracks,False,False,None,0,0,0,0,False,False,70,110,160,5,8,12,1,1,0.9,0,0,0,0,0,0,65,105,155,0,0.15,0.3,병졸 셋. Damage/Interval = 병졸 공격
+Bombard,Tower.Bombard.Name,Tower.Bombard.Desc,Bombard,False,False,Bomb,0,0.85,0,150,False,True,125,220,320,28,50,82,2.8,2.8,2.6,290,310,330,85,95,105,0,0,0,0,0,0,ShotSpeed 0 = 늘 ShotTime 만큼 날아간다
+Mage,Tower.Mage.Name,Tower.Mage.Desc,Mage,True,True,MagicBolt,520,0.18,0,0,True,False,100,160,240,30,52,84,1.5,1.5,1.4,250,270,290,0,0,0,0,0,0,0,0,0,
+Shrine,Tower.Shrine.Name,Tower.Shrine.Desc,Shrine,True,True,ShrineOrb,480,0.18,0,0,True,False,110,150,200,7,11,16,1.2,1,0.8,250,265,280,55,60,65,0,0,0,0,0,0,원소를 묻힌다
