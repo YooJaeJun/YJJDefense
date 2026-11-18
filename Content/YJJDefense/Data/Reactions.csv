@@ -1,0 +1,16 @@
+﻿Name,ElementA,ElementB,NameKey,SpellKey,DescKey,Color,Radius,FxRadius,Damage,Knockback,BurnScale,BurnTime,PoisonScale,PoisonTime,SlowFactor,SlowTime,StunTime,FreezeTime,VulnMult,VulnTime,Targets,ZoneTime,ZoneDps,ZoneSlow,ZoneBurn,ZoneGroundOnly,Note
+Evaporate,Fire,Ice,Reaction.Evaporate.Name,Reaction.Evaporate.Spell,Reaction.Evaporate.Desc,FFBF99,75,0,0.9,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,False,피해·화상·독·장판 값은 모두 반응 세기(스펠 피해) x 값
+Steam,Fire,Water,Reaction.Steam.Name,Reaction.Steam.Spell,Reaction.Steam.Desc,E6E6F2,125,0,0,0,0,0,0,0,1,0,0,0,1,0,0,3.5,0.28,1,0,False,증기 장판
+Overload,Fire,Lightning,Reaction.Overload.Name,Reaction.Overload.Spell,Reaction.Overload.Desc,FF8CCC,140,0,0.6,60,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,False,
+Combust,Fire,Poison,Reaction.Combust.Name,Reaction.Combust.Spell,Reaction.Combust.Desc,FF991A,95,0,0,0,0.55,4,0,0,1,0,0,0,1,0,0,0,0,1,0,False,
+Firestorm,Fire,Wind,Reaction.Firestorm.Name,Reaction.Firestorm.Spell,Reaction.Firestorm.Desc,FF731A,150,0,0,0,0,0,0,0,1,0,0,0,1,0,0,3,0.3,1,0.2,False,화염 장판
+Freeze,Ice,Water,Reaction.Freeze.Name,Reaction.Freeze.Spell,Reaction.Freeze.Desc,99E6FF,95,0,0,0,0,0,0,0,1,0,0,2.4,1,0,0,0,0,1,0,False,
+Superconduct,Ice,Lightning,Reaction.Superconduct.Name,Reaction.Superconduct.Spell,Reaction.Superconduct.Desc,BFB3FF,130,0,0.2,0,0,0,0,0,1,0,0,0,1.4,6,0,0,0,1,0,False,받는 피해 x VulnMult
+Frostbite,Ice,Poison,Reaction.Frostbite.Name,Reaction.Frostbite.Spell,Reaction.Frostbite.Desc,8CE6BF,105,0,0,0,0,0,0.2,5,0.4,4.5,0,0,1,0,0,0,0,1,0,False,
+Blizzard,Ice,Wind,Reaction.Blizzard.Name,Reaction.Blizzard.Spell,Reaction.Blizzard.Desc,D9F2FF,170,0,0,0,0,0,0,0,1,0,0,0,1,0,0,4,0.1,0.5,0,False,눈보라 장판
+Electrocute,Water,Lightning,Reaction.Electrocute.Name,Reaction.Electrocute.Spell,Reaction.Electrocute.Desc,B3D9FF,160,0,0.75,0,0,0,0,0,1,0,0.5,0,1,0,0,0,0,1,0,False,
+Swamp,Water,Poison,Reaction.Swamp.Name,Reaction.Swamp.Spell,Reaction.Swamp.Desc,80BF4D,130,0,0,0,0,0,0,0,1,0,0,0,1,0,0,7,0.18,0.75,0,True,독늪 (나는 적은 안 빠진다)
+Tidal,Water,Wind,Reaction.Tidal.Name,Reaction.Tidal.Spell,Reaction.Tidal.Desc,66BFFF,140,0,0.3,140,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,False,
+Neurotoxin,Lightning,Poison,Reaction.Neurotoxin.Name,Reaction.Neurotoxin.Spell,Reaction.Neurotoxin.Desc,D9F24D,95,0,0,0,0,0,0.2,5,1,0,1.4,0,1,0,0,0,0,1,0,False,
+Thunderstorm,Lightning,Wind,Reaction.Thunderstorm.Name,Reaction.Thunderstorm.Spell,Reaction.Thunderstorm.Desc,FFF280,260,110,0.55,0,0,0,0,0,1,0,0.2,0,1,0,4,0,0,1,0,False,Radius 안 가까운 Targets 명에게 번개
+Plague,Poison,Wind,Reaction.Plague.Name,Reaction.Plague.Spell,Reaction.Plague.Desc,B3CC59,170,0,0,0,0,0,0.3,6,1,0,0,0,1,0,0,0,0,1,0,False,

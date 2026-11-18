@@ -1,0 +1,24 @@
+﻿Name,Sound,Volume,Note
+EnemyKilled,SFX_Pop,0.7,행 이름 = 게임 사건 (사건_투사체). 소리는 /Game/YJJDefense/Audio
+EnemyLeaked,SFX_Leak,1,
+TowerBuilt,SFX_Build,1,
+TowerUpgraded,SFX_Build,1,
+WizardUpgraded,SFX_Build,1,
+TowerSold,SFX_Coin,1,
+TowerFired_Arrow,SFX_Arrow,0.5,
+TowerFired_Bomb,SFX_Cannon,0.5,
+TowerFired_MagicBolt,SFX_Magic,0.5,
+TowerFired_ShrineOrb,SFX_Magic,0.5,
+ProjectileHit_Bomb,SFX_Boom,0.7,
+SpellCast,SFX_Cast,1,
+SpellImpact,SFX_Boom,0.9,
+Reaction,SFX_Reaction,1,
+ChainArc,SFX_Zap,0.8,
+SkyBolt,SFX_Zap,0.8,
+MeleeHit,SFX_Hit,0.4,
+WaveStarted,SFX_Horn,1,
+WaveBonus,SFX_Coin,1,
+Victory,SFX_Victory,1,
+Defeat,SFX_Defeat,1,
+UI_Click,SFX_Click,1,버튼
+Music,BGM_Meadow,0.45,배경음 (반복)

@@ -1,0 +1,4 @@
+﻿Name,Order,NameKey,DescKey,Texture,Showcase,Note
+Map01,1,Map.Map01.Name,Map.Map01.Desc,T_Map01,"(Imp,Chicken,Potato,Toast,Mushroom,PuddingKing)",모양은 MapGeometry.csv (Tools/Art/map_data.py가 생성)
+Map02,2,Map.Map02.Name,Map.Map02.Desc,T_Map02,"(Crab,Jellyfish,Coconut,KingCrab)",
+Map03,3,Map.Map03.Name,Map.Map03.Desc,T_Map03,"(Snowman,Penguin,Yeti)",

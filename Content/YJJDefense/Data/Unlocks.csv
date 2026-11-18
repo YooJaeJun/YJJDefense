@@ -1,0 +1,15 @@
+﻿Name,Order,Rune,Tower,Points,Note
+Fire,0,Fire,None,0,Points 0 = 처음부터 가진 것
+Ice,0,Ice,None,0,
+Water,0,Water,None,0,
+Lightning,0,Lightning,None,0,
+Explosion,0,Explosion,None,0,
+Archer,0,None,Archer,0,
+Barracks,0,None,Barracks,0,
+Bombard,0,None,Bombard,0,
+Wind,1,Wind,None,8,누적 수집 점수가 Points가 되면 풀린다 (Order 순)
+Mage,2,None,Mage,20,
+Poison,3,Poison,None,36,
+Chain,4,Chain,None,56,
+Shrine,5,None,Shrine,80,
+Split,6,Split,None,110,

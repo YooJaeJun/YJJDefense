@@ -1,0 +1,10 @@
+﻿Name,Element,NameKey,SpellKey,DescKey,Color,Art,BurnScale,BurnTime,SlowFactor,SlowTime,StunTime,PoisonScale,PoisonTime,Knockback,SpellDamageMult,SpellRadiusBonus,Note
+Fire,Fire,Rune.Fire.Name,Rune.Fire.Spell,Rune.Fire.Desc,FF6B29,Fire,0.25,3,1,0,0,0,0,0,1,0,화상 = 피해 x BurnScale 초당
+Ice,Ice,Rune.Ice.Name,Rune.Ice.Spell,Rune.Ice.Desc,8CE0FF,Ice,0,0,0.6,2.5,0,0,0,0,1,0,둔화 = 속도 x SlowFactor
+Water,Water,Rune.Water.Name,Rune.Water.Spell,Rune.Water.Desc,408CFF,Water,0,0,1,0,0,0,0,0,1,30,넓게 튄다
+Lightning,Lightning,Rune.Lightning.Name,Rune.Lightning.Spell,Rune.Lightning.Desc,FFE640,Lightning,0,0,1,0,0.3,0,0,0,1.25,0,아프고 잠깐 기절
+Poison,Poison,Rune.Poison.Name,Rune.Poison.Spell,Rune.Poison.Desc,99D940,Poison,0,0,1,0,0,0.16,6,0,1,0,오래가는 독
+Wind,Wind,Rune.Wind.Name,Rune.Wind.Spell,Rune.Wind.Desc,BFFFD9,Wind,0,0,1,0,0,0,0,48,1,0,뒤로 밀어낸다 (길 거리)
+Explosion,None,Rune.Explosion.Name,Rune.Explosion.Spell,Rune.Explosion.Desc,FF99BF,Explosion,0,0,1,0,0,0,0,0,1,0,형태 룬 (수치는 Tuning.csv Forge*)
+Chain,None,Rune.Chain.Name,Rune.Chain.Spell,Rune.Chain.Desc,CCA6FF,Chain,0,0,1,0,0,0,0,0,1,0,형태 룬
+Split,None,Rune.Split.Name,Rune.Split.Spell,Rune.Split.Desc,FFCC80,Split,0,0,1,0,0,0,0,0,1,0,형태 룬
