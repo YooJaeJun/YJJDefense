@@ -124,3 +124,6 @@ BotForgeInterval,18,룬을 바꿔 새 조합을 시험하는 간격(초)
 BotCoverageRange,260,자리 점수: 이 사거리 안의 길
 BotCoverageStep,20,자리 점수: 길을 재는 간격
 BotCoverageGateBias,0.4,자리 점수: 성문에 가까운 길 가산
+TraitFastSpeed,110,"이 속도 이상이면 ""빠름"" 표시"
+TraitArmor,0.4,"이 갑옷 이상이면 ""갑옷"" 표시"
+TraitMagicResist,0.4,"이 마법 저항 이상이면 ""마법 저항"" 표시"
