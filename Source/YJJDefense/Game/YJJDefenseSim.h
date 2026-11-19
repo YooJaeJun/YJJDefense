@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Game/YJJDefenseTypes.h"
+#include "Game/YJJGameData.h"
 #include "Game/YJJSpellForge.h"
 #include "Math/RandomStream.h"
+#include "YJJDefenseSim.generated.h"
 
 struct FYJJEnemyState
 {
@@ -81,15 +83,6 @@ struct FYJJTowerState
 	bool bAimLeft = false;
 };
 
-enum class EYJJProjectile : uint8
-{
-	Arrow,
-	Bomb,
-	MagicBolt,
-	ShrineOrb,
-	SpellBall
-};
-
 struct FYJJProjectileState
 {
 	EYJJProjectile Kind = EYJJProjectile::Arrow;
@@ -133,6 +126,8 @@ struct FYJJDiskState
 	float CooldownMax = 1.f;
 };
 
+// 화면 연출·소리에 넘기는 사건. 이름이 Sounds.csv 행 이름이 된다
+UENUM()
 enum class EYJJSimEvent : uint8
 {
 	EnemyKilled,     // Pos, Int=골드, Value=몬스터 종류
@@ -177,17 +172,17 @@ enum class EYJJRunResult : uint8
 	Defeat
 };
 
-struct FYJJRunConfig
+// 한 판을 시작하는 조건. 기본값 = 처음 시작한 사람의 조건 (Unlocks.csv 의 처음부터 가진 것, StartDisks.csv)
+struct YJJDEFENSE_API FYJJRunConfig
 {
+	FYJJRunConfig();
+
 	int32 Map = 0;
 	int32 Tier = 1;
-	int32 Seed = 1;
-	uint32 RuneMask = 0x1F;   // 들고 나온 룬
-	uint32 TowerMask = 0x07;  // 들고 나온 병졸
-	EYJJRune Disks[YJJ::NumDisks][YJJ::NumSockets] = {
-		{ EYJJRune::Fire, EYJJRune::Explosion },
-		{ EYJJRune::Water, EYJJRune::Lightning },
-		{ EYJJRune::Ice, EYJJRune::None } };
+	int32 Seed = 0;
+	uint32 RuneMask = 0;    // 들고 나온 룬 (비트 = EYJJRune)
+	uint32 TowerMask = 0;   // 들고 나온 병졸 (비트 = EYJJTower)
+	EYJJRune Disks[YJJ::NumDisks][YJJ::NumSockets];
 };
 
 // 타워 디펜스 한 판의 규칙 전부. UObject·월드와 무관한 순수 계산이라 테스트에서 그대로 돌린다.
@@ -195,6 +190,7 @@ struct FYJJRunConfig
 class YJJDEFENSE_API FYJJDefenseSim
 {
 public:
+	/** 시뮬레이션 1스텝 (초). 결정적이려면 늘 이 간격으로만 돈다 */
 	static constexpr float FixedStep = 1.f / 60.f;
 
 	void Reset(const FYJJRunConfig& InConfig);
@@ -295,9 +291,42 @@ private:
 	void HitWithSpell(const FYJJSpellSpec& Spell, const FVector2f& Pos, float Radius, float Damage, int32 OnlyEnemyId, TArray<int32>& HitIds);
 	void ImpactSpell(const FYJJSpellSpec& Spell, const FVector2f& Pos, float Damage);
 	void TriggerReaction(EYJJReaction Reaction, const FVector2f& Pos, float Power);
+	void ApplyReactionTo(const FYJJReactionDef& Def, FYJJEnemyState& Enemy, float Power);
+	void FireTower(FYJJTowerState& Tower, const FYJJTowerDef& Def, const FYJJTowerLevel& Level, const FVector2f& SpotPos, const FYJJEnemyState& Target);
+	void StepSoldierFight(FYJJSoldierState& Soldier, FYJJEnemyState& Target, const FYJJTowerLevel& Level);
+	void StepSoldierRest(FYJJSoldierState& Soldier);
+	void StepEnemyFight(FYJJEnemyState& Enemy, FYJJSoldierState& Blocker);
+	void StepEnemyHeal(FYJJEnemyState& Enemy);
 
+	/** 반경 안의 산 적마다 Func. Func 안에서 적이 죽거나 밀려날 수 있지만 배열 크기는 스텝 끝에서만 줄어든다 */
 	template <typename FuncType>
-	void ForEnemiesInRadius(const FVector2f& Pos, float Radius, FuncType&& Func);
+	void ForEnemiesInRadius(const FVector2f& Pos, float Radius, FuncType&& Func)
+	{
+		for (int32 Index = 0; Index < Enemies.Num(); ++Index)
+		{
+			FYJJEnemyState& Enemy = Enemies[Index];
+			if (Enemy.IsAlive() && YJJ::RangeDist(Enemy.Pos, Pos) <= Radius + YJJData::Enemy(Enemy.Type).Radius * EnemyHitRadiusShare)
+			{
+				Func(Enemy);
+			}
+		}
+	}
+
+	static FVector2f TowerMuzzle(const FVector2f& SpotPos);
+	static FVector2f WizardMuzzle();
+	/** 적 반경의 이만큼까지 겹치면 범위 공격에 맞는다 */
+	static constexpr float EnemyHitRadiusShare = 0.5f;
+	/** 막지 않은 적을 먼저 노리게 하는 가산점 (길 거리보다 훨씬 크게) */
+	static constexpr float UnblockedTargetBonus = 100000.f;
+	/** 포물선 4t(1-t): 가운데에서 최댓값 1이 되게 하는 배율 */
+	static constexpr float ArcPeakScale = 4.f;
+
+public:
+	static constexpr int32 ThreeStars = 3;
+	static constexpr int32 TwoStars = 2;
+	static constexpr int32 OneStar = 1;
+
+private:
 
 	FRandomStream Rng;
 	TArray<FSpawn> SpawnQueue;   // 뒤에서부터 꺼낸다 (시간 내림차순)

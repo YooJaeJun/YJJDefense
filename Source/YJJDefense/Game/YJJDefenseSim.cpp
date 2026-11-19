@@ -1,42 +1,32 @@
 #include "Game/YJJDefenseSim.h"
 #include "Game/YJJGameData.h"
 
-namespace
+FYJJRunConfig::FYJJRunConfig()
 {
-	constexpr float Dt = FYJJDefenseSim::FixedStep;
-
-	// 보스는 군중 제어를 덜 받는다
-	constexpr float BossControlScale = 0.35f;
-
-	const FVector2f SoldierSlotOffsets[YJJ::SoldiersPerBarracks] = { FVector2f(-24.f, -8.f), FVector2f(24.f, -4.f), FVector2f(0.f, 16.f) };
-
-	FVector2f TowerMuzzle(const FVector2f& SpotPos)
+	RuneMask = YJJData::StartRuneMask();
+	TowerMask = YJJData::StartTowerMask();
+	for (int32 Disk = 0; Disk < YJJ::NumDisks; ++Disk)
 	{
-		return SpotPos + FVector2f(0.f, -92.f);
-	}
-
-	FVector2f WizardMuzzle()
-	{
-		return YJJMap::WizardPos() + FVector2f(-26.f, -118.f);
-	}
-}
-
-template <typename FuncType>
-void FYJJDefenseSim::ForEnemiesInRadius(const FVector2f& Pos, float Radius, FuncType&& Func)
-{
-	// Func 안에서 적이 죽거나 밀려날 수 있지만 배열 크기는 스텝 끝에서만 줄어든다
-	for (int32 Index = 0; Index < Enemies.Num(); ++Index)
-	{
-		FYJJEnemyState& Enemy = Enemies[Index];
-		if (Enemy.IsAlive() && YJJ::RangeDist(Enemy.Pos, Pos) <= Radius + YJJData::Enemy(Enemy.Type).Radius * 0.5f)
+		for (int32 Socket = 0; Socket < YJJ::NumSockets; ++Socket)
 		{
-			Func(Enemy);
+			Disks[Disk][Socket] = YJJData::StartDisk(Disk, Socket);
 		}
 	}
 }
 
+FVector2f FYJJDefenseSim::TowerMuzzle(const FVector2f& SpotPos)
+{
+	return SpotPos - FVector2f(0.f, YJJData::Tune().TowerMuzzleHeight);
+}
+
+FVector2f FYJJDefenseSim::WizardMuzzle()
+{
+	return YJJMap::WizardPos() + YJJData::Tune().WizardMuzzle();
+}
+
 void FYJJDefenseSim::Reset(const FYJJRunConfig& InConfig)
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	Config = InConfig;
 	Config.Tier = FMath::Max(Config.Tier, 1);
 	Config.Map = FMath::Clamp(Config.Map, 0, YJJMap::NumMaps() - 1);
@@ -44,8 +34,8 @@ void FYJJDefenseSim::Reset(const FYJJRunConfig& InConfig)
 
 	Result = EYJJRunResult::Playing;
 	Time = 0.f;
-	Gold = YJJData::StartGold;
-	Lives = YJJData::StartLives;
+	Gold = Tune.StartGold;
+	Lives = Tune.StartLives;
 	WaveIndex = INDEX_NONE;
 	NextWaveTimer = 0.f;
 	WizardLevel = 0;
@@ -77,7 +67,7 @@ void FYJJDefenseSim::Reset(const FYJJRunConfig& InConfig)
 			const EYJJRune Rune = Config.Disks[Disk][Socket];
 			Disks[Disk].Sockets[Socket] = HasRune(Rune) ? Rune : EYJJRune::None;
 		}
-		Disks[Disk].Spell = YJJSpellForge::Combine(Disks[Disk].Sockets);
+		Disks[Disk].Spell = FYJJSpellForge::Combine(Disks[Disk].Sockets);
 	}
 }
 
@@ -88,11 +78,11 @@ void FYJJDefenseSim::Step()
 		return;
 	}
 
-	Time += Dt;
-	WizardCastAnim = FMath::Max(WizardCastAnim - Dt, 0.f);
+	Time += FixedStep;
+	WizardCastAnim = FMath::Max(WizardCastAnim - FixedStep, 0.f);
 	for (FYJJDiskState& Disk : Disks)
 	{
-		Disk.Cooldown = FMath::Max(Disk.Cooldown - Dt, 0.f);
+		Disk.Cooldown = FMath::Max(Disk.Cooldown - FixedStep, 0.f);
 	}
 
 	StepWaves();
@@ -173,7 +163,7 @@ bool FYJJDefenseSim::CanUpgrade(int32 Spot) const
 
 int32 FYJJDefenseSim::SellValue(int32 Spot) const
 {
-	return Towers.IsValidIndex(Spot) && Towers[Spot].bBuilt ? FMath::FloorToInt(Towers[Spot].Spent * YJJData::SellRefund) : 0;
+	return Towers.IsValidIndex(Spot) && Towers[Spot].bBuilt ? FMath::FloorToInt(Towers[Spot].Spent * YJJData::Tune().SellRefund) : 0;
 }
 
 bool FYJJDefenseSim::CanCallWave() const
@@ -188,7 +178,7 @@ bool FYJJDefenseSim::CanCast(int32 Disk) const
 
 int32 FYJJDefenseSim::WizardUpgradeCost() const
 {
-	return WizardLevel < YJJData::MaxWizardLevel ? YJJData::WizardUpgradeCost[WizardLevel] : 0;
+	return YJJData::Tune().WizardCost(WizardLevel);
 }
 
 int32 FYJJDefenseSim::Stars() const
@@ -197,7 +187,8 @@ int32 FYJJDefenseSim::Stars() const
 	{
 		return 0;
 	}
-	return Lives >= 18 ? 3 : (Lives >= 8 ? 2 : 1);
+	const FYJJTuning& Tune = YJJData::Tune();
+	return Lives >= Tune.Star3Lives ? ThreeStars : (Lives >= Tune.Star2Lives ? TwoStars : OneStar);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -210,6 +201,7 @@ bool FYJJDefenseSim::BuildTower(int32 Spot, EYJJTower Type)
 		return false;
 	}
 
+	const FYJJTuning& Tune = YJJData::Tune();
 	const FVector2f SpotPos = YJJMap::Spots()[Spot];
 	const FYJJTowerDef& Def = YJJData::Tower(Type);
 
@@ -218,21 +210,20 @@ bool FYJJDefenseSim::BuildTower(int32 Spot, EYJJTower Type)
 	Tower.bBuilt = true;
 	Tower.Type = Type;
 	Tower.Spent = Def.Levels[0].Cost;
-	Tower.Cooldown = 0.4f;
-	Tower.BuildAnim = 0.35f;
+	Tower.Cooldown = Tune.TowerFirstShotDelay;
+	Tower.BuildAnim = Tune.TowerBuildAnim;
 	Tower.Rally = YJJMap::PointAt(YJJMap::NearestDist(SpotPos));
 	Gold -= Def.Levels[0].Cost;
 
 	if (Type == EYJJTower::Shrine)
 	{
 		// 들고 나온 원소 중 첫 번째
-		Tower.ShrineElement = EYJJElement::Fire;
-		for (int32 Index = 0; Index <= static_cast<int32>(EYJJRune::Wind); ++Index)
+		Tower.ShrineElement = EYJJElement::None;
+		for (int32 Index = 0; Index <= static_cast<int32>(EYJJRune::Wind) && Tower.ShrineElement == EYJJElement::None; ++Index)
 		{
 			if (HasRune(static_cast<EYJJRune>(Index)))
 			{
 				Tower.ShrineElement = YJJData::RuneElement(static_cast<EYJJRune>(Index));
-				break;
 			}
 		}
 	}
@@ -244,7 +235,7 @@ bool FYJJDefenseSim::BuildTower(int32 Spot, EYJJTower Type)
 			Soldier.Id = NextId++;
 			Soldier.Spot = Spot;
 			Soldier.Slot = Slot;
-			Soldier.Home = Tower.Rally + SoldierSlotOffsets[Slot];
+			Soldier.Home = Tower.Rally + Tune.SoldierSlot(Slot);
 			Soldier.Pos = SpotPos;
 			Soldier.MaxHP = Def.Levels[0].SoldierHP;
 			Soldier.HP = Soldier.MaxHP;
@@ -267,7 +258,7 @@ bool FYJJDefenseSim::UpgradeTower(int32 Spot)
 	Gold -= Cost;
 	Tower.Spent += Cost;
 	Tower.Level++;
-	Tower.BuildAnim = 0.35f;
+	Tower.BuildAnim = YJJData::Tune().TowerBuildAnim;
 
 	if (Tower.Type == EYJJTower::Barracks)
 	{
@@ -300,14 +291,15 @@ bool FYJJDefenseSim::SellTower(int32 Spot)
 	{
 		for (const FYJJSoldierState& Soldier : Soldiers)
 		{
-			if (Soldier.Spot == Spot)
+			if (Soldier.Spot != Spot)
 			{
-				for (FYJJEnemyState& Enemy : Enemies)
+				continue;
+			}
+			for (FYJJEnemyState& Enemy : Enemies)
+			{
+				if (Enemy.BlockerId == Soldier.Id)
 				{
-					if (Enemy.BlockerId == Soldier.Id)
-					{
-						Enemy.BlockerId = INDEX_NONE;
-					}
+					Enemy.BlockerId = INDEX_NONE;
 				}
 			}
 		}
@@ -371,13 +363,13 @@ bool FYJJDefenseSim::SetSocket(int32 Disk, int32 Socket, EYJJRune Rune)
 	}
 
 	State.Sockets[Socket] = Rune;
-	State.Spell = YJJSpellForge::Combine(State.Sockets);
+	State.Spell = FYJJSpellForge::Combine(State.Sockets);
 
 	// 전투 중에 바꾸면 잠깐 식혀야 한다 (바꿔 끼우며 연사하는 것 방지)
 	if (WaveIndex >= 0)
 	{
-		State.Cooldown = FMath::Max(State.Cooldown, YJJData::SocketChangeCooldown);
-		State.CooldownMax = FMath::Max(State.Cooldown, 0.01f);
+		State.Cooldown = FMath::Max(State.Cooldown, YJJData::Tune().SocketChangeCooldown);
+		State.CooldownMax = FMath::Max(State.Cooldown, KINDA_SMALL_NUMBER);
 	}
 	return true;
 }
@@ -389,20 +381,21 @@ bool FYJJDefenseSim::CastSpell(int32 Disk, const FVector2f& Target)
 		return false;
 	}
 
+	const FYJJTuning& Tune = YJJData::Tune();
 	FYJJDiskState& State = Disks[Disk];
 	const FYJJSpellSpec& Spell = State.Spell;
-	const float Damage = Spell.Damage * YJJData::WizardDamageScale[WizardLevel];
+	const float Damage = Spell.Damage * Tune.WizardDamage(WizardLevel);
 
 	// 분열: 첫 발은 목표 지점, 나머지는 근처의 다른 적 (없으면 주변에 흩뿌린다)
-	TArray<FVector2f, TInlineAllocator<5>> Targets;
+	TArray<FVector2f> Targets;
 	Targets.Add(Target);
 	if (Spell.Projectiles > 1)
 	{
-		TArray<const FYJJEnemyState*, TInlineAllocator<32>> Nearby;
+		TArray<const FYJJEnemyState*> Nearby;
 		for (const FYJJEnemyState& Enemy : Enemies)
 		{
 			const float Distance = YJJ::RangeDist(Enemy.Pos, Target);
-			if (Enemy.IsAlive() && Distance > Spell.Radius * 0.8f && Distance < 320.f)
+			if (Enemy.IsAlive() && Distance > Spell.Radius * Tune.SplitTargetMinScale && Distance < Tune.SplitTargetMaxDistance)
 			{
 				Nearby.Add(&Enemy);
 			}
@@ -414,12 +407,10 @@ bool FYJJDefenseSim::CastSpell(int32 Disk, const FVector2f& Target)
 			if (Nearby.IsValidIndex(Index - 1))
 			{
 				Targets.Add(Nearby[Index - 1]->Pos);
+				continue;
 			}
-			else
-			{
-				const float Angle = UE_TWO_PI * Index / Spell.Projectiles + Rng.FRandRange(-0.3f, 0.3f);
-				Targets.Add(Target + FVector2f(FMath::Cos(Angle) * 105.f, FMath::Sin(Angle) * 105.f / YJJ::YStretch));
-			}
+			const float Angle = UE_TWO_PI * Index / Spell.Projectiles + Rng.FRandRange(-Tune.SplitScatterJitter, Tune.SplitScatterJitter);
+			Targets.Add(Target + FVector2f(FMath::Cos(Angle), FMath::Sin(Angle) / YJJ::YStretch) * Tune.SplitScatterRadius);
 		}
 	}
 
@@ -432,8 +423,8 @@ bool FYJJDefenseSim::CastSpell(int32 Disk, const FVector2f& Target)
 		Ball.Pos = Muzzle;
 		Ball.PrevPos = Muzzle;
 		Ball.Target = Targets[Index];
-		Ball.Duration = FMath::Max(FVector2f::Distance(Muzzle, Targets[Index]) / YJJData::SpellBallSpeed, 0.28f) + 0.05f * Index;
-		Ball.ArcHeight = 90.f + 25.f * Index;
+		Ball.Duration = FMath::Max(FVector2f::Distance(Muzzle, Targets[Index]) / Tune.SpellBallSpeed, Tune.SpellBallMinTime) + Tune.SpellBallStagger * Index;
+		Ball.ArcHeight = Tune.SpellBallArc + Tune.SpellBallArcStep * Index;
 		Ball.Damage = Damage;
 		Ball.bMagic = true;
 		Ball.Element = Spell.Elements[0];
@@ -441,9 +432,9 @@ bool FYJJDefenseSim::CastSpell(int32 Disk, const FVector2f& Target)
 		Ball.Spell = Spell;
 	}
 
-	State.CooldownMax = Spell.Cooldown * YJJData::WizardCooldownScale[WizardLevel];
+	State.CooldownMax = Spell.Cooldown * Tune.WizardCooldown(WizardLevel);
 	State.Cooldown = State.CooldownMax;
-	WizardCastAnim = 0.35f;
+	WizardCastAnim = Tune.WizardCastAnim;
 	SpellsCast++;
 	if (Spell.ComboId != INDEX_NONE)
 	{
@@ -465,9 +456,10 @@ bool FYJJDefenseSim::CallNextWave()
 	}
 
 	// 일찍 부르면 남은 시간만큼 보너스
-	if (WaveIndex >= 0 && NextWaveTimer > 1.f)
+	const FYJJTuning& Tune = YJJData::Tune();
+	if (WaveIndex >= 0 && NextWaveTimer > Tune.EarlyCallMinTime)
 	{
-		const int32 Bonus = FMath::RoundToInt(NextWaveTimer);
+		const int32 Bonus = FMath::RoundToInt(NextWaveTimer * Tune.EarlyCallGoldPerSecond);
 		Gold += Bonus;
 		Emit(EYJJSimEvent::WaveBonus, YJJMap::PointAt(0.f)).Int = Bonus;
 	}
@@ -480,10 +472,11 @@ bool FYJJDefenseSim::CallNextWave()
 
 void FYJJDefenseSim::StartWave(int32 Index)
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	WaveIndex = Index;
 	WaveTime = 0.f;
 	NextWaveTimer = 0.f;
-	HPScale = (1.f + YJJData::TierHPStep * (Config.Tier - 1)) * (1.f + 0.07f * Index);
+	HPScale = (1.f + Tune.TierHPStep * (Config.Tier - 1)) * (1.f + Tune.WaveHPStep * Index);
 
 	SpawnQueue.Reset();
 	for (const FYJJWaveGroup& Group : YJJData::Wave(Index))
@@ -509,15 +502,16 @@ int32 FYJJDefenseSim::DebugSpawnEnemy(EYJJEnemy Type, float Dist)
 
 FYJJEnemyState& FYJJDefenseSim::SpawnEnemy(EYJJEnemy Type)
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	const FYJJEnemyDef& Def = YJJData::Enemy(Type);
 	FYJJEnemyState& Enemy = Enemies.AddDefaulted_GetRef();
 	Enemy.Id = NextId++;
 	Enemy.Type = Type;
 	Enemy.MaxHP = Def.HP * HPScale;
 	Enemy.HP = Enemy.MaxHP;
-	Enemy.Lateral = Def.bBoss ? 0.f : Rng.FRandRange(-20.f, 20.f);
-	Enemy.AnimTime = Rng.FRandRange(0.f, 1.f);
-	Enemy.AttackTimer = Def.MeleeInterval * 0.5f;
+	Enemy.Lateral = Def.bBoss ? 0.f : Rng.FRandRange(-Tune.EnemyLateralSpread, Tune.EnemyLateralSpread);
+	Enemy.AnimTime = Rng.FRand();
+	Enemy.AttackTimer = Def.MeleeInterval * Tune.EnemyFirstAttackDelay;
 	Enemy.Pos = YJJMap::PointAt(0.f, Enemy.Lateral, &Enemy.Dir);
 	return Enemy;
 }
@@ -529,25 +523,26 @@ void FYJJDefenseSim::StepWaves()
 		return;
 	}
 
+	const FYJJTuning& Tune = YJJData::Tune();
 	if (SpawnQueue.Num() > 0)
 	{
-		WaveTime += Dt;
+		WaveTime += FixedStep;
 		while (SpawnQueue.Num() > 0 && SpawnQueue.Last().Time <= WaveTime)
 		{
 			SpawnEnemy(SpawnQueue.Pop(EAllowShrinking::No).Type);
 		}
 		if (SpawnQueue.IsEmpty())
 		{
-			NextWaveTimer = YJJData::WaveGap;
+			NextWaveTimer = Tune.WaveGap;
 		}
 	}
 	else if (WaveIndex + 1 < YJJData::NumWaves())
 	{
-		NextWaveTimer -= Dt;
+		NextWaveTimer -= FixedStep;
 		if (Enemies.IsEmpty())
 		{
 			// 다 잡았으면 오래 기다리지 않는다
-			NextWaveTimer = FMath::Min(NextWaveTimer, 5.f);
+			NextWaveTimer = FMath::Min(NextWaveTimer, Tune.WaveGapWhenClear);
 		}
 		if (NextWaveTimer <= 0.f)
 		{
@@ -566,6 +561,7 @@ void FYJJDefenseSim::DamageEnemy(FYJJEnemyState& Enemy, float Amount, bool bMagi
 		return;
 	}
 
+	const FYJJTuning& Tune = YJJData::Tune();
 	const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
 	float Final = Amount * (1.f - (bMagic ? Def.MagicResist : Def.Armor));
 	if (Enemy.VulnTime > 0.f)
@@ -574,40 +570,42 @@ void FYJJDefenseSim::DamageEnemy(FYJJEnemyState& Enemy, float Amount, bool bMagi
 	}
 
 	Enemy.HP -= Final;
-	if (Amount > 2.f)
+	if (Amount > Tune.HitFlashMinDamage)
 	{
-		Enemy.HitFlash = 0.12f;
+		Enemy.HitFlash = Tune.HitFlashTime;
 	}
 
-	if (Enemy.HP <= 0.f)
+	if (Enemy.HP > 0.f)
 	{
-		Enemy.HP = 0.f;
-		Gold += Def.Gold;
-		Kills++;
-		FYJJSimEvent& Event = Emit(EYJJSimEvent::EnemyKilled, Enemy.Pos);
-		Event.Int = Def.Gold;
-		Event.Value = static_cast<float>(Enemy.Type);
+		return;
+	}
+	Enemy.HP = 0.f;
+	Gold += Def.Gold;
+	Kills++;
+	FYJJSimEvent& Event = Emit(EYJJSimEvent::EnemyKilled, Enemy.Pos);
+	Event.Int = Def.Gold;
+	Event.Value = static_cast<float>(Enemy.Type);
 
-		if (Def.HasSplit())
-		{
-			PendingSplits.Add({ Def.SplitInto, Def.SplitCount, Enemy.Dist, Enemy.Lateral, Enemy.Pos });
-		}
+	if (Def.HasSplit())
+	{
+		PendingSplits.Add({ Def.SplitInto, Def.SplitCount, Enemy.Dist, Enemy.Lateral, Enemy.Pos });
 	}
 }
 
 void FYJJDefenseSim::SpawnSplits()
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	for (const FSplit& Split : PendingSplits)
 	{
 		for (int32 Index = 0; Index < Split.Count; ++Index)
 		{
-			// 앞뒤·좌우로 조금씩 벌려 놓는다
+			// 앞뒤·좌우로 조금씩 벌려 놓는다 (Side: -1 ~ 1)
 			FYJJEnemyState& Kid = SpawnEnemy(Split.Type);
-			const float Side = Split.Count > 1 ? (static_cast<float>(Index) / (Split.Count - 1) - 0.5f) * 2.f : 0.f;
-			Kid.Dist = FMath::Max(Split.Dist - 10.f * Index, 0.f);
-			Kid.Lateral = FMath::Clamp(Split.Lateral + Side * 16.f, -26.f, 26.f);
+			const float Side = Split.Count > 1 ? FMath::Lerp(-1.f, 1.f, static_cast<float>(Index) / (Split.Count - 1)) : 0.f;
+			Kid.Dist = FMath::Max(Split.Dist - Tune.SplitBackStep * Index, 0.f);
+			Kid.Lateral = FMath::Clamp(Split.Lateral + Side * Tune.SplitSideSpread, -Tune.SplitLateralLimit, Tune.SplitLateralLimit);
 			Kid.Pos = YJJMap::PointAt(Kid.Dist, Kid.Lateral, &Kid.Dir);
-			Kid.HitFlash = 0.12f;
+			Kid.HitFlash = Tune.HitFlashTime;
 		}
 		FYJJSimEvent& Event = Emit(EYJJSimEvent::EnemySplit, Split.Pos);
 		Event.Value = static_cast<float>(Split.Type);
@@ -624,7 +622,7 @@ bool FYJJDefenseSim::ResistsChill(FYJJEnemyState& Enemy)
 	}
 	if (Enemy.ImmuneTextCooldown <= 0.f)
 	{
-		Enemy.ImmuneTextCooldown = 1.5f;
+		Enemy.ImmuneTextCooldown = YJJData::Tune().ImmuneTextCooldown;
 		Emit(EYJJSimEvent::EnemyImmune, Enemy.Pos).Element = EYJJElement::Ice;
 	}
 	return true;
@@ -632,25 +630,33 @@ bool FYJJDefenseSim::ResistsChill(FYJJEnemyState& Enemy)
 
 void FYJJDefenseSim::AddBurn(FYJJEnemyState& Enemy, float Dps, float Duration)
 {
+	if (Dps <= 0.f || Duration <= 0.f)
+	{
+		return;
+	}
 	Enemy.BurnDps = Enemy.BurnTime > 0.f ? FMath::Max(Enemy.BurnDps, Dps) : Dps;
 	Enemy.BurnTime = FMath::Max(Enemy.BurnTime, Duration);
 }
 
 void FYJJDefenseSim::AddPoison(FYJJEnemyState& Enemy, float Dps, float Duration)
 {
+	if (Dps <= 0.f || Duration <= 0.f)
+	{
+		return;
+	}
 	Enemy.PoisonDps = Enemy.PoisonTime > 0.f ? FMath::Max(Enemy.PoisonDps, Dps) : Dps;
 	Enemy.PoisonTime = FMath::Max(Enemy.PoisonTime, Duration);
 }
 
 void FYJJDefenseSim::AddSlow(FYJJEnemyState& Enemy, float Factor, float Duration)
 {
-	if (ResistsChill(Enemy))
+	if (Factor >= 1.f || Duration <= 0.f || ResistsChill(Enemy))
 	{
 		return;
 	}
 	if (YJJData::Enemy(Enemy.Type).bBoss)
 	{
-		Factor = FMath::Lerp(1.f, Factor, 0.5f);
+		Factor = FMath::Lerp(1.f, Factor, YJJData::Tune().BossSlowScale);
 	}
 	Enemy.SlowFactor = Enemy.SlowTime > 0.f ? FMath::Min(Enemy.SlowFactor, Factor) : Factor;
 	Enemy.SlowTime = FMath::Max(Enemy.SlowTime, Duration);
@@ -658,23 +664,33 @@ void FYJJDefenseSim::AddSlow(FYJJEnemyState& Enemy, float Factor, float Duration
 
 void FYJJDefenseSim::AddStun(FYJJEnemyState& Enemy, float Duration)
 {
-	Enemy.StunTime = FMath::Max(Enemy.StunTime, Duration * (YJJData::Enemy(Enemy.Type).bBoss ? BossControlScale : 1.f));
+	if (Duration <= 0.f)
+	{
+		return;
+	}
+	const float Scale = YJJData::Enemy(Enemy.Type).bBoss ? YJJData::Tune().BossControlScale : 1.f;
+	Enemy.StunTime = FMath::Max(Enemy.StunTime, Duration * Scale);
 }
 
 void FYJJDefenseSim::AddFreeze(FYJJEnemyState& Enemy, float Duration)
 {
-	if (ResistsChill(Enemy))
+	if (Duration <= 0.f || ResistsChill(Enemy))
 	{
 		return;
 	}
-	Enemy.FreezeTime = FMath::Max(Enemy.FreezeTime, Duration * (YJJData::Enemy(Enemy.Type).bBoss ? BossControlScale : 1.f));
+	const float Scale = YJJData::Enemy(Enemy.Type).bBoss ? YJJData::Tune().BossControlScale : 1.f;
+	Enemy.FreezeTime = FMath::Max(Enemy.FreezeTime, Duration * Scale);
 }
 
 void FYJJDefenseSim::Knockback(FYJJEnemyState& Enemy, float Amount)
 {
+	if (Amount <= 0.f)
+	{
+		return;
+	}
 	if (YJJData::Enemy(Enemy.Type).bBoss)
 	{
-		Amount *= BossControlScale;
+		Amount *= YJJData::Tune().BossControlScale;
 	}
 	Enemy.Dist = FMath::Max(Enemy.Dist - Amount, 0.f);
 	Enemy.BlockerId = INDEX_NONE;
@@ -683,19 +699,17 @@ void FYJJDefenseSim::Knockback(FYJJEnemyState& Enemy, float Amount)
 
 void FYJJDefenseSim::ApplyIntrinsic(FYJJEnemyState& Enemy, EYJJElement Element, float Power)
 {
-	if (!Enemy.IsAlive())
+	if (!Enemy.IsAlive() || Element == EYJJElement::None)
 	{
 		return;
 	}
-	switch (Element)
-	{
-	case EYJJElement::Fire: AddBurn(Enemy, Power * 0.25f, 3.f); break;
-	case EYJJElement::Ice: AddSlow(Enemy, 0.6f, 2.5f); break;
-	case EYJJElement::Lightning: AddStun(Enemy, 0.3f); break;
-	case EYJJElement::Poison: AddPoison(Enemy, Power * 0.16f, 6.f); break;
-	case EYJJElement::Wind: Knockback(Enemy, 48.f); break;
-	default: break;
-	}
+	// 원소마다 받는 효과는 Runes.csv (안 쓰는 칸은 0이라 아무 일도 안 일어난다)
+	const FYJJRuneDef& Def = YJJData::Rune(YJJData::ElementRune(Element));
+	AddBurn(Enemy, Power * Def.BurnScale, Def.BurnTime);
+	AddSlow(Enemy, Def.SlowFactor, Def.SlowTime);
+	AddStun(Enemy, Def.StunTime);
+	AddPoison(Enemy, Power * Def.PoisonScale, Def.PoisonTime);
+	Knockback(Enemy, Def.Knockback);
 }
 
 EYJJReaction FYJJDefenseSim::ApplyElement(FYJJEnemyState& Enemy, EYJJElement Element, float Power)
@@ -709,15 +723,69 @@ EYJJReaction FYJJDefenseSim::ApplyElement(FYJJEnemyState& Enemy, EYJJElement Ele
 
 	if (Enemy.Aura != EYJJElement::None && Enemy.Aura != Element)
 	{
-		const EYJJReaction Reaction = YJJSpellForge::GetReaction(Enemy.Aura, Element);
+		const EYJJReaction Reaction = YJJData::ReactionOf(Enemy.Aura, Element);
 		Enemy.Aura = EYJJElement::None;
 		Enemy.AuraTime = 0.f;
 		return Reaction;
 	}
 
 	Enemy.Aura = Element;
-	Enemy.AuraTime = YJJData::AuraDuration;
+	Enemy.AuraTime = YJJData::Tune().AuraDuration;
 	return EYJJReaction::None;
+}
+
+void FYJJDefenseSim::StepEnemyHeal(FYJJEnemyState& Enemy)
+{
+	const FYJJTuning& Tune = YJJData::Tune();
+	const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
+	Enemy.HealTimer += FixedStep;
+	if (Enemy.HealTimer < Tune.HealInterval)
+	{
+		return;
+	}
+	Enemy.HealTimer = 0.f;
+
+	bool bHealed = false;
+	for (FYJJEnemyState& Other : Enemies)
+	{
+		if (Other.IsAlive() && Other.HP < Other.MaxHP && YJJ::RangeDist(Other.Pos, Enemy.Pos) <= Tune.HealRadius)
+		{
+			Other.HP = FMath::Min(Other.HP + Def.HealPerSecond * Tune.HealInterval, Other.MaxHP);
+			bHealed = true;
+		}
+	}
+	if (bHealed)
+	{
+		Emit(EYJJSimEvent::Heal, Enemy.Pos).Value = Tune.HealRadius;
+	}
+}
+
+void FYJJDefenseSim::StepEnemyFight(FYJJEnemyState& Enemy, FYJJSoldierState& Blocker)
+{
+	const FYJJTuning& Tune = YJJData::Tune();
+	const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
+	Enemy.AnimTime += FixedStep;
+	Enemy.AttackTimer -= FixedStep;
+	if (Enemy.AttackTimer > 0.f)
+	{
+		return;
+	}
+
+	Enemy.AttackTimer = Def.MeleeInterval;
+	const float Armor = YJJData::Tower(EYJJTower::Barracks).Levels[Towers[Blocker.Spot].Level].SoldierArmor;
+	Blocker.HP -= Def.MeleeDamage * (1.f - Armor);
+	Blocker.HitFlash = Tune.HitFlashTime;
+	Blocker.IdleTime = 0.f;
+	Emit(EYJJSimEvent::MeleeHit, Blocker.Pos);
+
+	if (Blocker.HP <= 0.f)
+	{
+		Blocker.HP = 0.f;
+		Blocker.RespawnTimer = Tune.SoldierRespawn;
+		Blocker.TargetId = INDEX_NONE;
+		Enemy.BlockerId = INDEX_NONE;
+		Emit(EYJJSimEvent::SoldierDied, Blocker.Pos);
+	}
 }
 
 void FYJJDefenseSim::StepEnemies()
@@ -733,57 +801,38 @@ void FYJJDefenseSim::StepEnemies()
 		}
 		const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
 
-		Enemy.HitFlash = FMath::Max(Enemy.HitFlash - Dt, 0.f);
-		Enemy.AuraTime -= Dt;
+		Enemy.HitFlash = FMath::Max(Enemy.HitFlash - FixedStep, 0.f);
+		Enemy.AuraTime -= FixedStep;
 		if (Enemy.AuraTime <= 0.f)
 		{
 			Enemy.Aura = EYJJElement::None;
 		}
-		Enemy.SlowTime = FMath::Max(Enemy.SlowTime - Dt, 0.f);
-		Enemy.StunTime = FMath::Max(Enemy.StunTime - Dt, 0.f);
-		Enemy.FreezeTime = FMath::Max(Enemy.FreezeTime - Dt, 0.f);
-		Enemy.VulnTime = FMath::Max(Enemy.VulnTime - Dt, 0.f);
-		Enemy.ImmuneTextCooldown = FMath::Max(Enemy.ImmuneTextCooldown - Dt, 0.f);
+		Enemy.SlowTime = FMath::Max(Enemy.SlowTime - FixedStep, 0.f);
+		Enemy.StunTime = FMath::Max(Enemy.StunTime - FixedStep, 0.f);
+		Enemy.FreezeTime = FMath::Max(Enemy.FreezeTime - FixedStep, 0.f);
+		Enemy.VulnTime = FMath::Max(Enemy.VulnTime - FixedStep, 0.f);
+		Enemy.ImmuneTextCooldown = FMath::Max(Enemy.ImmuneTextCooldown - FixedStep, 0.f);
 
 		// 지속 피해
 		if (Enemy.BurnTime > 0.f)
 		{
-			Enemy.BurnTime -= Dt;
-			DamageEnemy(Enemy, Enemy.BurnDps * Dt, true);
+			Enemy.BurnTime -= FixedStep;
+			DamageEnemy(Enemy, Enemy.BurnDps * FixedStep, true);
 		}
 		if (Enemy.PoisonTime > 0.f)
 		{
-			Enemy.PoisonTime -= Dt;
-			DamageEnemy(Enemy, Enemy.PoisonDps * Dt, true);
+			Enemy.PoisonTime -= FixedStep;
+			DamageEnemy(Enemy, Enemy.PoisonDps * FixedStep, true);
 		}
 		if (!Enemy.IsAlive())
 		{
 			continue;
 		}
 
-		// 응원 버섯: 주변 회복
 		if (Def.HealPerSecond > 0.f && !Enemy.IsDisabled())
 		{
-			Enemy.HealTimer += Dt;
-			if (Enemy.HealTimer >= 1.f)
-			{
-				Enemy.HealTimer = 0.f;
-				bool bHealed = false;
-				for (FYJJEnemyState& Other : Enemies)
-				{
-					if (Other.IsAlive() && Other.HP < Other.MaxHP && YJJ::RangeDist(Other.Pos, Enemy.Pos) <= 135.f)
-					{
-						Other.HP = FMath::Min(Other.HP + Def.HealPerSecond, Other.MaxHP);
-						bHealed = true;
-					}
-				}
-				if (bHealed)
-				{
-					Emit(EYJJSimEvent::Heal, Enemy.Pos).Value = 135.f;
-				}
-			}
+			StepEnemyHeal(Enemy);
 		}
-
 		if (Enemy.IsDisabled())
 		{
 			continue;
@@ -793,38 +842,17 @@ void FYJJDefenseSim::StepEnemies()
 		if (Enemy.BlockerId != INDEX_NONE)
 		{
 			FYJJSoldierState* Blocker = FindSoldier(Enemy.BlockerId);
-			if (!Blocker || !Blocker->IsAlive() || Blocker->TargetId != Enemy.Id)
+			if (Blocker && Blocker->IsAlive() && Blocker->TargetId == Enemy.Id)
 			{
-				Enemy.BlockerId = INDEX_NONE;
-			}
-			else
-			{
-				Enemy.AnimTime += Dt;
-				Enemy.AttackTimer -= Dt;
-				if (Enemy.AttackTimer <= 0.f)
-				{
-					Enemy.AttackTimer = Def.MeleeInterval;
-					const float Armor = YJJData::Tower(EYJJTower::Barracks).Levels[Towers[Blocker->Spot].Level].SoldierArmor;
-					Blocker->HP -= Def.MeleeDamage * (1.f - Armor);
-					Blocker->HitFlash = 0.12f;
-					Blocker->IdleTime = 0.f;
-					Emit(EYJJSimEvent::MeleeHit, Blocker->Pos);
-					if (Blocker->HP <= 0.f)
-					{
-						Blocker->HP = 0.f;
-						Blocker->RespawnTimer = YJJData::SoldierRespawn;
-						Blocker->TargetId = INDEX_NONE;
-						Enemy.BlockerId = INDEX_NONE;
-						Emit(EYJJSimEvent::SoldierDied, Blocker->Pos);
-					}
-				}
+				StepEnemyFight(Enemy, *Blocker);
 				continue;
 			}
+			Enemy.BlockerId = INDEX_NONE;
 		}
 
 		const float Speed = Def.Speed * (Enemy.SlowTime > 0.f ? Enemy.SlowFactor : 1.f);
-		Enemy.Dist += Speed * Dt;
-		Enemy.AnimTime += Dt * (Speed / FMath::Max(Def.Speed, 1.f));
+		Enemy.Dist += Speed * FixedStep;
+		Enemy.AnimTime += FixedStep * (Speed / FMath::Max(Def.Speed, KINDA_SMALL_NUMBER));
 		Enemy.Pos = YJJMap::PointAt(Enemy.Dist, Enemy.Lateral, &Enemy.Dir);
 
 		if (Enemy.Dist >= PathLength)
@@ -839,21 +867,76 @@ void FYJJDefenseSim::StepEnemies()
 // ---------------------------------------------------------------------------------------------
 // 병졸
 
+void FYJJDefenseSim::StepSoldierFight(FYJJSoldierState& Soldier, FYJJEnemyState& Target, const FYJJTowerLevel& Level)
+{
+	const FYJJTuning& Tune = YJJData::Tune();
+	Soldier.IdleTime = 0.f;
+
+	// 적의 앞을 막아선다
+	const FVector2f Desired = Target.Pos + Target.Dir * (YJJData::Enemy(Target.Type).Radius + Tune.SoldierFrontGap) + Tune.SoldierSlot(Soldier.Slot) * Tune.SoldierSlotSpread;
+	const FVector2f Delta = Desired - Soldier.Pos;
+	const float Distance = Delta.Size();
+	Soldier.bFacingLeft = Target.Pos.X < Soldier.Pos.X;
+
+	if (Distance < Tune.SoldierBlockDistance && Target.BlockerId == INDEX_NONE)
+	{
+		Target.BlockerId = Soldier.Id;
+	}
+	if (Distance > Tune.SoldierArriveDistance)
+	{
+		Soldier.Pos += Delta / Distance * FMath::Min(Tune.SoldierSpeed * FixedStep, Distance);
+		Soldier.bMoving = true;
+	}
+	if (Distance >= Tune.SoldierAttackDistance)
+	{
+		return;
+	}
+	Soldier.AttackTimer -= FixedStep;
+	if (Soldier.AttackTimer <= 0.f)
+	{
+		Soldier.AttackTimer = Level.Interval;
+		Soldier.AttackAnim = Tune.SoldierAttackAnim;
+		DamageEnemy(Target, Level.Damage, false);
+		Emit(EYJJSimEvent::MeleeHit, Target.Pos);
+	}
+}
+
+void FYJJDefenseSim::StepSoldierRest(FYJJSoldierState& Soldier)
+{
+	const FYJJTuning& Tune = YJJData::Tune();
+	const FVector2f Delta = Soldier.Home - Soldier.Pos;
+	const float Distance = Delta.Size();
+	if (Distance > Tune.SoldierHomeArrive)
+	{
+		Soldier.Pos += Delta / Distance * FMath::Min(Tune.SoldierSpeed * FixedStep, Distance);
+		Soldier.bFacingLeft = Delta.X < 0.f;
+		Soldier.bMoving = true;
+	}
+
+	// 쉬는 동안 회복
+	Soldier.IdleTime += FixedStep;
+	if (Soldier.IdleTime > Tune.SoldierIdleHealDelay)
+	{
+		Soldier.HP = FMath::Min(Soldier.HP + Soldier.MaxHP * Tune.SoldierIdleHealRate * FixedStep, Soldier.MaxHP);
+	}
+}
+
 void FYJJDefenseSim::StepSoldiers()
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	for (FYJJSoldierState& Soldier : Soldiers)
 	{
 		const FVector2f SpotPos = YJJMap::Spots()[Soldier.Spot];
 		const FYJJTowerLevel& Level = TowerLevel(Soldier.Spot);
 
-		Soldier.HitFlash = FMath::Max(Soldier.HitFlash - Dt, 0.f);
-		Soldier.AttackAnim = FMath::Max(Soldier.AttackAnim - Dt, 0.f);
-		Soldier.AnimTime += Dt;
+		Soldier.HitFlash = FMath::Max(Soldier.HitFlash - FixedStep, 0.f);
+		Soldier.AttackAnim = FMath::Max(Soldier.AttackAnim - FixedStep, 0.f);
+		Soldier.AnimTime += FixedStep;
 		Soldier.bMoving = false;
 
 		if (!Soldier.IsAlive())
 		{
-			Soldier.RespawnTimer -= Dt;
+			Soldier.RespawnTimer -= FixedStep;
 			if (Soldier.RespawnTimer <= 0.f)
 			{
 				Soldier.RespawnTimer = 0.f;
@@ -864,9 +947,9 @@ void FYJJDefenseSim::StepSoldiers()
 			continue;
 		}
 
-		// 목표가 죽었거나 멀어졌으면 놓는다
+		// 목표가 날아갔거나 멀어졌으면 놓는다
 		FYJJEnemyState* Target = FindEnemyMutable(Soldier.TargetId);
-		if (Target && (YJJData::Enemy(Target->Type).bFlying || FVector2f::Distance(Target->Pos, Soldier.Home) > YJJData::SoldierEngageRange + 30.f))
+		if (Target && (YJJData::Enemy(Target->Type).bFlying || FVector2f::Distance(Target->Pos, Soldier.Home) > Tune.SoldierEngageRange + Tune.SoldierReleaseSlack))
 		{
 			if (Target->BlockerId == Soldier.Id)
 			{
@@ -882,11 +965,11 @@ void FYJJDefenseSim::StepSoldiers()
 			float BestScore = -1.f;
 			for (FYJJEnemyState& Enemy : Enemies)
 			{
-				if (!Enemy.IsAlive() || YJJData::Enemy(Enemy.Type).bFlying || FVector2f::Distance(Enemy.Pos, Soldier.Home) > YJJData::SoldierEngageRange)
+				if (!Enemy.IsAlive() || YJJData::Enemy(Enemy.Type).bFlying || FVector2f::Distance(Enemy.Pos, Soldier.Home) > Tune.SoldierEngageRange)
 				{
 					continue;
 				}
-				const float Score = Enemy.Dist + (Enemy.BlockerId == INDEX_NONE ? 100000.f : 0.f);
+				const float Score = Enemy.Dist + (Enemy.BlockerId == INDEX_NONE ? UnblockedTargetBonus : 0.f);
 				if (Score > BestScore)
 				{
 					BestScore = Score;
@@ -901,59 +984,52 @@ void FYJJDefenseSim::StepSoldiers()
 
 		if (Target)
 		{
-			Soldier.IdleTime = 0.f;
-
-			// 적의 앞을 막아선다
-			const FVector2f Desired = Target->Pos + Target->Dir * (YJJData::Enemy(Target->Type).Radius + 14.f) + SoldierSlotOffsets[Soldier.Slot] * 0.35f;
-			const FVector2f Delta = Desired - Soldier.Pos;
-			const float Distance = Delta.Size();
-			Soldier.bFacingLeft = Target->Pos.X < Soldier.Pos.X;
-
-			if (Distance < 46.f && Target->BlockerId == INDEX_NONE)
-			{
-				Target->BlockerId = Soldier.Id;
-			}
-
-			if (Distance > 6.f)
-			{
-				Soldier.Pos += Delta / Distance * FMath::Min(YJJData::SoldierSpeed * Dt, Distance);
-				Soldier.bMoving = true;
-			}
-			if (Distance < 30.f)
-			{
-				Soldier.AttackTimer -= Dt;
-				if (Soldier.AttackTimer <= 0.f)
-				{
-					Soldier.AttackTimer = Level.Interval;
-					Soldier.AttackAnim = 0.22f;
-					DamageEnemy(*Target, Level.Damage, false);
-					Emit(EYJJSimEvent::MeleeHit, Target->Pos);
-				}
-			}
+			StepSoldierFight(Soldier, *Target, Level);
 		}
 		else
 		{
-			const FVector2f Delta = Soldier.Home - Soldier.Pos;
-			const float Distance = Delta.Size();
-			if (Distance > 3.f)
-			{
-				Soldier.Pos += Delta / Distance * FMath::Min(YJJData::SoldierSpeed * Dt, Distance);
-				Soldier.bFacingLeft = Delta.X < 0.f;
-				Soldier.bMoving = true;
-			}
-
-			// 쉬는 동안 회복
-			Soldier.IdleTime += Dt;
-			if (Soldier.IdleTime > 2.f)
-			{
-				Soldier.HP = FMath::Min(Soldier.HP + Soldier.MaxHP * 0.12f * Dt, Soldier.MaxHP);
-			}
+			StepSoldierRest(Soldier);
 		}
 	}
 }
 
 // ---------------------------------------------------------------------------------------------
 // 타워
+
+void FYJJDefenseSim::FireTower(FYJJTowerState& Tower, const FYJJTowerDef& Def, const FYJJTowerLevel& Level, const FVector2f& SpotPos, const FYJJEnemyState& Target)
+{
+	const FYJJTuning& Tune = YJJData::Tune();
+	Tower.Cooldown = Level.Interval;
+	Tower.FireAnim = Tune.TowerFireAnim;
+	Tower.bAimLeft = Target.Pos.X < SpotPos.X;
+
+	const FVector2f Muzzle = TowerMuzzle(SpotPos);
+	const float Distance = FVector2f::Distance(Muzzle, Target.Pos);
+
+	FYJJProjectileState& Shot = Projectiles.AddDefaulted_GetRef();
+	Shot.Kind = Def.Projectile;
+	Shot.Start = Muzzle;
+	Shot.Pos = Muzzle;
+	Shot.PrevPos = Muzzle;
+	Shot.Target = Target.Pos;
+	Shot.TargetId = Def.bHoming ? Target.Id : INDEX_NONE;
+	Shot.Damage = Level.Damage;
+	Shot.Splash = Level.Splash;
+	Shot.bMagic = Def.bMagic;
+	Shot.Element = Def.Type == EYJJTower::Shrine ? Tower.ShrineElement : EYJJElement::None;
+	Shot.Duration = Def.ShotSpeed > 0.f ? FMath::Max(Distance / Def.ShotSpeed, Def.ShotTime) : Def.ShotTime;
+	Shot.ArcHeight = Distance * Def.ShotArcRatio + Def.ShotArcHeight;
+
+	if (Def.bLeadTarget)
+	{
+		// 적이 걸어올 자리를 미리 겨냥한다 (멈춰 있으면 그 자리)
+		const bool bStanding = Target.BlockerId != INDEX_NONE || Target.IsDisabled();
+		const float Speed = YJJData::Enemy(Target.Type).Speed * (Target.SlowTime > 0.f ? Target.SlowFactor : 1.f);
+		Shot.Target = bStanding ? Target.Pos : YJJMap::PointAt(Target.Dist + Speed * Shot.Duration, Target.Lateral);
+	}
+
+	Emit(EYJJSimEvent::TowerFired, Muzzle).Int = static_cast<int32>(Shot.Kind);
+}
 
 void FYJJDefenseSim::StepTowers()
 {
@@ -967,15 +1043,16 @@ void FYJJDefenseSim::StepTowers()
 			continue;
 		}
 
-		Tower.Cooldown -= Dt;
-		Tower.FireAnim = FMath::Max(Tower.FireAnim - Dt, 0.f);
-		Tower.BuildAnim = FMath::Max(Tower.BuildAnim - Dt, 0.f);
-		if (Tower.Type == EYJJTower::Barracks || Tower.Cooldown > 0.f)
+		Tower.Cooldown -= FixedStep;
+		Tower.FireAnim = FMath::Max(Tower.FireAnim - FixedStep, 0.f);
+		Tower.BuildAnim = FMath::Max(Tower.BuildAnim - FixedStep, 0.f);
+
+		const FYJJTowerDef& Def = YJJData::Tower(Tower.Type);
+		if (Def.Projectile == EYJJProjectile::None || Tower.Cooldown > 0.f)
 		{
 			continue;
 		}
 
-		const FYJJTowerDef& Def = YJJData::Tower(Tower.Type);
 		const FYJJTowerLevel& Level = Def.Levels[Tower.Level];
 		const FVector2f SpotPos = Spots[Spot];
 
@@ -992,59 +1069,10 @@ void FYJJDefenseSim::StepTowers()
 				Target = &Enemy;
 			}
 		}
-		if (!Target)
+		if (Target)
 		{
-			continue;
+			FireTower(Tower, Def, Level, SpotPos, *Target);
 		}
-
-		Tower.Cooldown = Level.Interval;
-		Tower.FireAnim = 0.25f;
-		Tower.bAimLeft = Target->Pos.X < SpotPos.X;
-
-		const FVector2f Muzzle = TowerMuzzle(SpotPos);
-		const float Distance = FVector2f::Distance(Muzzle, Target->Pos);
-
-		FYJJProjectileState& Shot = Projectiles.AddDefaulted_GetRef();
-		Shot.Start = Muzzle;
-		Shot.Pos = Muzzle;
-		Shot.PrevPos = Muzzle;
-		Shot.Target = Target->Pos;
-		Shot.TargetId = Target->Id;
-		Shot.Damage = Level.Damage;
-		Shot.Splash = Level.Splash;
-		Shot.bMagic = Def.bMagic;
-
-		switch (Tower.Type)
-		{
-		case EYJJTower::Archer:
-			Shot.Kind = EYJJProjectile::Arrow;
-			Shot.Duration = FMath::Max(Distance / 720.f, 0.14f);
-			Shot.ArcHeight = Distance * 0.12f;
-			break;
-		case EYJJTower::Mage:
-			Shot.Kind = EYJJProjectile::MagicBolt;
-			Shot.Duration = FMath::Max(Distance / 520.f, 0.18f);
-			break;
-		case EYJJTower::Shrine:
-			Shot.Kind = EYJJProjectile::ShrineOrb;
-			Shot.Duration = FMath::Max(Distance / 480.f, 0.18f);
-			Shot.Element = Tower.ShrineElement;
-			break;
-		default:
-		{
-			// 포탄은 유도하지 않고, 적이 걸어올 자리를 미리 겨냥한다
-			Shot.Kind = EYJJProjectile::Bomb;
-			Shot.Duration = 0.85f;
-			Shot.ArcHeight = 150.f;
-			Shot.TargetId = INDEX_NONE;
-			const bool bStanding = Target->BlockerId != INDEX_NONE || Target->IsDisabled();
-			const float Speed = YJJData::Enemy(Target->Type).Speed * (Target->SlowTime > 0.f ? Target->SlowFactor : 1.f);
-			Shot.Target = bStanding ? Target->Pos : YJJMap::PointAt(Target->Dist + Speed * Shot.Duration, Target->Lateral);
-			break;
-		}
-		}
-
-		Emit(EYJJSimEvent::TowerFired, Muzzle).Int = static_cast<int32>(Shot.Kind);
 	}
 }
 
@@ -1053,11 +1081,10 @@ void FYJJDefenseSim::StepTowers()
 
 void FYJJDefenseSim::StepProjectiles()
 {
-	// 착탄 처리에서 새 투사체가 생기지는 않지만, 안전하게 인덱스로 돈다
 	for (int32 Index = Projectiles.Num() - 1; Index >= 0; --Index)
 	{
 		FYJJProjectileState& Projectile = Projectiles[Index];
-		Projectile.Time += Dt;
+		Projectile.Time += FixedStep;
 
 		if (const FYJJEnemyState* Target = FindEnemy(Projectile.TargetId))
 		{
@@ -1067,7 +1094,7 @@ void FYJJDefenseSim::StepProjectiles()
 		const float Alpha = FMath::Clamp(Projectile.Time / Projectile.Duration, 0.f, 1.f);
 		Projectile.PrevPos = Projectile.Pos;
 		Projectile.Pos = FMath::Lerp(Projectile.Start, Projectile.Target, Alpha);
-		Projectile.Pos.Y -= Projectile.ArcHeight * 4.f * Alpha * (1.f - Alpha);
+		Projectile.Pos.Y -= Projectile.ArcHeight * ArcPeakScale * Alpha * (1.f - Alpha);
 
 		if (Alpha >= 1.f)
 		{
@@ -1097,7 +1124,7 @@ void FYJJDefenseSim::ResolveProjectile(const FYJJProjectileState& Projectile)
 		{
 			if (!YJJData::Enemy(Enemy.Type).bFlying)
 			{
-				DamageEnemy(Enemy, Projectile.Damage, false);
+				DamageEnemy(Enemy, Projectile.Damage, Projectile.bMagic);
 			}
 		});
 		FYJJSimEvent& Event = Emit(EYJJSimEvent::ProjectileHit, Projectile.Target);
@@ -1109,12 +1136,13 @@ void FYJJDefenseSim::ResolveProjectile(const FYJJProjectileState& Projectile)
 	case EYJJProjectile::ShrineOrb:
 	{
 		// 약한 피해 + 원소를 묻힌다. 이미 다른 원소가 묻어 있으면 반응
+		const float Power = Projectile.Damage * YJJData::Tune().ShrinePowerScale;
 		EYJJReaction Pending = EYJJReaction::None;
 		FVector2f PendingPos = Projectile.Target;
 		ForEnemiesInRadius(Projectile.Target, Projectile.Splash, [&](FYJJEnemyState& Enemy)
 		{
-			DamageEnemy(Enemy, Projectile.Damage, true);
-			const EYJJReaction Reaction = ApplyElement(Enemy, Projectile.Element, Projectile.Damage * 3.f);
+			DamageEnemy(Enemy, Projectile.Damage, Projectile.bMagic);
+			const EYJJReaction Reaction = ApplyElement(Enemy, Projectile.Element, Power);
 			if (Reaction != EYJJReaction::None && Pending == EYJJReaction::None)
 			{
 				Pending = Reaction;
@@ -1127,13 +1155,16 @@ void FYJJDefenseSim::ResolveProjectile(const FYJJProjectileState& Projectile)
 		Event.Element = Projectile.Element;
 		if (Pending != EYJJReaction::None)
 		{
-			TriggerReaction(Pending, PendingPos, Projectile.Damage * 3.f * YJJData::WizardDamageScale[WizardLevel]);
+			TriggerReaction(Pending, PendingPos, Power * YJJData::Tune().WizardDamage(WizardLevel));
 		}
 		break;
 	}
 
 	case EYJJProjectile::SpellBall:
 		ImpactSpell(Projectile.Spell, Projectile.Target, Projectile.Damage);
+		break;
+
+	default:
 		break;
 	}
 }
@@ -1145,13 +1176,14 @@ void FYJJDefenseSim::HitWithSpell(const FYJJSpellSpec& Spell, const FVector2f& P
 {
 	EYJJReaction Pending = EYJJReaction::None;
 	FVector2f PendingPos = Pos;
+	const bool bTwoElements = Spell.NumElements == YJJ::NumSockets;
 
 	auto HitOne = [&](FYJJEnemyState& Enemy)
 	{
 		HitIds.AddUnique(Enemy.Id);
 		DamageEnemy(Enemy, Damage, true);
 
-		if (Spell.NumElements == 2)
+		if (bTwoElements)
 		{
 			// 두 원소가 한꺼번에 닿는다 → 오라를 남기지 않고 아래에서 반응이 바로 터진다
 			ApplyIntrinsic(Enemy, Spell.Elements[0], Damage);
@@ -1187,7 +1219,7 @@ void FYJJDefenseSim::HitWithSpell(const FYJJSpellSpec& Spell, const FVector2f& P
 	Event.Element = Spell.Elements[0];
 	Event.Int = static_cast<int32>(Spell.NumElements > 1 ? Spell.Elements[1] : EYJJElement::None);
 
-	if (Spell.NumElements == 2)
+	if (bTwoElements)
 	{
 		TriggerReaction(Spell.Reaction, Pos, Damage);
 	}
@@ -1199,16 +1231,17 @@ void FYJJDefenseSim::HitWithSpell(const FYJJSpellSpec& Spell, const FVector2f& P
 
 void FYJJDefenseSim::ImpactSpell(const FYJJSpellSpec& Spell, const FVector2f& Pos, float Damage)
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	TArray<int32> HitIds;
 	HitWithSpell(Spell, Pos, Spell.Radius, Damage, INDEX_NONE, HitIds);
 
 	// 연쇄: 아직 안 맞은 가장 가까운 적으로 옮겨 붙는다
 	FVector2f From = Pos;
-	float HopDamage = Damage * 0.7f;
+	float HopDamage = Damage * Tune.ChainHopDamage;
 	for (int32 Jump = 0; Jump < Spell.ChainJumps; ++Jump)
 	{
 		const FYJJEnemyState* Next = nullptr;
-		float BestDistance = 240.f;
+		float BestDistance = Tune.ChainSearchRange;
 		for (const FYJJEnemyState& Enemy : Enemies)
 		{
 			const float Distance = YJJ::RangeDist(Enemy.Pos, From);
@@ -1237,7 +1270,27 @@ void FYJJDefenseSim::ImpactSpell(const FYJJSpellSpec& Spell, const FVector2f& Po
 			HitWithSpell(Spell, NextPos, 0.f, HopDamage, Next->Id, HitIds);
 		}
 		From = NextPos;
-		HopDamage *= 0.88f;
+		HopDamage *= Tune.ChainHopFalloff;
+	}
+}
+
+void FYJJDefenseSim::ApplyReactionTo(const FYJJReactionDef& Def, FYJJEnemyState& Enemy, float Power)
+{
+	DamageEnemy(Enemy, Power * Def.Damage, true);
+	if (!Enemy.IsAlive())
+	{
+		return;
+	}
+	Knockback(Enemy, Def.Knockback);
+	AddBurn(Enemy, Power * Def.BurnScale, Def.BurnTime);
+	AddPoison(Enemy, Power * Def.PoisonScale, Def.PoisonTime);
+	AddSlow(Enemy, Def.SlowFactor, Def.SlowTime);
+	AddStun(Enemy, Def.StunTime);
+	AddFreeze(Enemy, Def.FreezeTime);
+	if (Def.VulnTime > 0.f)
+	{
+		Enemy.VulnMult = Def.VulnMult;
+		Enemy.VulnTime = Def.VulnTime;
 	}
 }
 
@@ -1249,151 +1302,40 @@ void FYJJDefenseSim::TriggerReaction(EYJJReaction Reaction, const FVector2f& Pos
 	}
 	Reactions++;
 
-	float Radius = 90.f;
-	auto AddZone = [this, Reaction, &Pos](float ZoneRadius, float Duration) -> FYJJZoneState&
+	// 효과 종류는 Reactions.csv 의 칸으로 정해진다 (즉시 효과 / 가까운 몇 명에게 번개 / 장판)
+	const FYJJReactionDef& Def = YJJData::Reaction(Reaction);
+	if (Def.Targets > 0)
+	{
+		TArray<FYJJEnemyState*> Nearby;
+		ForEnemiesInRadius(Pos, Def.Radius, [&Nearby](FYJJEnemyState& Enemy) { Nearby.Add(&Enemy); });
+		Nearby.Sort([&Pos](const FYJJEnemyState& A, const FYJJEnemyState& B) { return YJJ::RangeDist(A.Pos, Pos) < YJJ::RangeDist(B.Pos, Pos); });
+		for (int32 Index = 0; Index < FMath::Min(Nearby.Num(), Def.Targets); ++Index)
+		{
+			Emit(EYJJSimEvent::SkyBolt, Pos).Pos2 = Nearby[Index]->Pos;
+			ApplyReactionTo(Def, *Nearby[Index], Power);
+		}
+	}
+	else
+	{
+		ForEnemiesInRadius(Pos, Def.Radius, [this, &Def, Power](FYJJEnemyState& Enemy) { ApplyReactionTo(Def, Enemy, Power); });
+	}
+
+	if (Def.ZoneTime > 0.f)
 	{
 		FYJJZoneState& Zone = Zones.AddDefaulted_GetRef();
 		Zone.Kind = Reaction;
 		Zone.Pos = Pos;
-		Zone.Radius = ZoneRadius;
-		Zone.Duration = Duration;
-		return Zone;
-	};
-
-	switch (Reaction)
-	{
-	case EYJJReaction::Evaporate:
-		Radius = 75.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy) { DamageEnemy(Enemy, Power * 0.9f, true); });
-		break;
-
-	case EYJJReaction::Steam:
-		Radius = 125.f;
-		AddZone(Radius, 3.5f).Dps = Power * 0.28f;
-		break;
-
-	case EYJJReaction::Overload:
-		Radius = 140.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy)
-		{
-			DamageEnemy(Enemy, Power * 0.6f, true);
-			Knockback(Enemy, 60.f);
-		});
-		break;
-
-	case EYJJReaction::Combust:
-		Radius = 95.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy) { AddBurn(Enemy, Power * 0.55f, 4.f); });
-		break;
-
-	case EYJJReaction::Firestorm:
-	{
-		Radius = 150.f;
-		FYJJZoneState& Zone = AddZone(Radius, 3.f);
-		Zone.Dps = Power * 0.3f;
-		Zone.BurnDps = Power * 0.2f;
-		break;
-	}
-
-	case EYJJReaction::Freeze:
-		Radius = 95.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy) { AddFreeze(Enemy, 2.4f); });
-		break;
-
-	case EYJJReaction::Superconduct:
-		Radius = 130.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy)
-		{
-			DamageEnemy(Enemy, Power * 0.2f, true);
-			Enemy.VulnMult = 1.4f;
-			Enemy.VulnTime = 6.f;
-		});
-		break;
-
-	case EYJJReaction::Frostbite:
-		Radius = 105.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy)
-		{
-			AddSlow(Enemy, 0.4f, 4.5f);
-			AddPoison(Enemy, Power * 0.2f, 5.f);
-		});
-		break;
-
-	case EYJJReaction::Blizzard:
-	{
-		Radius = 170.f;
-		FYJJZoneState& Zone = AddZone(Radius, 4.f);
-		Zone.Dps = Power * 0.1f;
-		Zone.SlowFactor = 0.5f;
-		break;
-	}
-
-	case EYJJReaction::Electrocute:
-		Radius = 160.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy)
-		{
-			DamageEnemy(Enemy, Power * 0.75f, true);
-			AddStun(Enemy, 0.5f);
-		});
-		break;
-
-	case EYJJReaction::Swamp:
-	{
-		Radius = 130.f;
-		FYJJZoneState& Zone = AddZone(Radius, 7.f);
-		Zone.Dps = Power * 0.18f;
-		Zone.SlowFactor = 0.75f;
-		Zone.bGroundOnly = true;
-		break;
-	}
-
-	case EYJJReaction::Tidal:
-		Radius = 140.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy)
-		{
-			DamageEnemy(Enemy, Power * 0.3f, true);
-			Knockback(Enemy, 140.f);
-		});
-		break;
-
-	case EYJJReaction::Neurotoxin:
-		Radius = 95.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy)
-		{
-			AddStun(Enemy, 1.4f);
-			AddPoison(Enemy, Power * 0.2f, 5.f);
-		});
-		break;
-
-	case EYJJReaction::Thunderstorm:
-	{
-		// 가까운 순서로 넷
-		Radius = 260.f;
-		TArray<FYJJEnemyState*, TInlineAllocator<32>> Nearby;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy) { Nearby.Add(&Enemy); });
-		Nearby.Sort([&Pos](const FYJJEnemyState& A, const FYJJEnemyState& B) { return YJJ::RangeDist(A.Pos, Pos) < YJJ::RangeDist(B.Pos, Pos); });
-		for (int32 Index = 0; Index < FMath::Min(Nearby.Num(), 4); ++Index)
-		{
-			Emit(EYJJSimEvent::SkyBolt, Pos).Pos2 = Nearby[Index]->Pos;
-			DamageEnemy(*Nearby[Index], Power * 0.55f, true);
-			AddStun(*Nearby[Index], 0.2f);
-		}
-		Radius = 110.f;
-		break;
-	}
-
-	case EYJJReaction::Plague:
-		Radius = 170.f;
-		ForEnemiesInRadius(Pos, Radius, [&](FYJJEnemyState& Enemy) { AddPoison(Enemy, Power * 0.3f, 6.f); });
-		break;
-
-	default:
-		break;
+		Zone.Radius = Def.Radius;
+		Zone.Duration = Def.ZoneTime;
+		Zone.Dps = Power * Def.ZoneDps;
+		Zone.SlowFactor = Def.ZoneSlow;
+		Zone.BurnDps = Power * Def.ZoneBurn;
+		Zone.bGroundOnly = Def.bZoneGroundOnly;
 	}
 
 	FYJJSimEvent& Event = Emit(EYJJSimEvent::Reaction, Pos);
 	Event.Reaction = Reaction;
-	Event.Value = Radius;
+	Event.Value = Def.DisplayRadius();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1401,37 +1343,27 @@ void FYJJDefenseSim::TriggerReaction(EYJJReaction Reaction, const FVector2f& Pos
 
 void FYJJDefenseSim::StepZones()
 {
-	constexpr float TickInterval = 0.25f;
-
+	const FYJJTuning& Tune = YJJData::Tune();
 	for (int32 Index = Zones.Num() - 1; Index >= 0; --Index)
 	{
 		FYJJZoneState& Zone = Zones[Index];
-		Zone.Time += Dt;
-		Zone.TickTimer += Dt;
+		Zone.Time += FixedStep;
+		Zone.TickTimer += FixedStep;
 
-		if (Zone.TickTimer >= TickInterval)
+		if (Zone.TickTimer >= Tune.ZoneTickInterval)
 		{
-			Zone.TickTimer -= TickInterval;
+			Zone.TickTimer -= Tune.ZoneTickInterval;
 			const FYJJZoneState Tick = Zone;
-			ForEnemiesInRadius(Tick.Pos, Tick.Radius, [this, &Tick](FYJJEnemyState& Enemy)
+			ForEnemiesInRadius(Tick.Pos, Tick.Radius, [this, &Tick, &Tune](FYJJEnemyState& Enemy)
 			{
 				if (Tick.bGroundOnly && YJJData::Enemy(Enemy.Type).bFlying)
 				{
 					return;
 				}
-				DamageEnemy(Enemy, Tick.Dps * TickInterval, true);
-				if (Tick.SlowFactor < 1.f)
-				{
-					AddSlow(Enemy, Tick.SlowFactor, 0.5f);
-				}
-				if (Tick.BurnDps > 0.f)
-				{
-					AddBurn(Enemy, Tick.BurnDps, 1.5f);
-				}
-				if (Tick.PoisonDps > 0.f)
-				{
-					AddPoison(Enemy, Tick.PoisonDps, 2.f);
-				}
+				DamageEnemy(Enemy, Tick.Dps * Tune.ZoneTickInterval, true);
+				AddSlow(Enemy, Tick.SlowFactor, Tune.ZoneSlowTime);
+				AddBurn(Enemy, Tick.BurnDps, Tune.ZoneBurnTime);
+				AddPoison(Enemy, Tick.PoisonDps, Tune.ZonePoisonTime);
 			});
 		}
 

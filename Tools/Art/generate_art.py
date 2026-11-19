@@ -1258,30 +1258,24 @@ def make_map(m, path):
 
 # ---------------------------------------------------------------------------------------------
 
-def write_maps_inl(paths, inl_path):
-    lines = ["// Tools/Art/generate_art.py가 Tools/Art/map_data.py에서 생성한다. 직접 고치지 말 것.", ""]
+def write_map_geometry(paths, csv_path):
+    """지도 모양을 Content/YJJDefense/Data/MapGeometry.csv로 (게임이 DataTable로 읽는다)."""
+
+    def vec(p):
+        return "(X=%.1f,Y=%.1f)" % (p[0], p[1])
+
+    def vec_list(points):
+        return '"(' + ",".join(vec(p) for p in points) + ')"'
+
+    lines = ["Name,Path,Spots,Wizard,Gate"]
     for m, path_points in zip(map_data.MAPS, paths):
-        key = m["key"]
         # 게임 규칙용으로는 24px 간격이면 충분하다
         coarse = path_points[::3]
         if coarse[-1] != path_points[-1]:
             coarse.append(path_points[-1])
-        lines.append("const FVector2f G%sPath[] = {" % key)
-        for index in range(0, len(coarse), 6):
-            lines.append("\t" + ", ".join("{ %.1ff, %.1ff }" % p for p in coarse[index:index + 6]) + ",")
-        lines.append("};")
-        lines.append("const FVector2f G%sSpots[] = {" % key)
-        lines.append("\t" + ", ".join("{ %.1ff, %.1ff }" % p for p in m["spots"]) + ",")
-        lines.append("};")
-        lines.append("")
-    lines.append("const FYJJMapGeometry GMapGeometry[] = {")
-    for m in map_data.MAPS:
-        key = m["key"]
-        lines.append("\t{ G%sPath, G%sSpots, { %.1ff, %.1ff }, { %.1ff, %.1ff }, TEXT(\"T_%s\") }," % (key, key, m["wizard"][0], m["wizard"][1], m["gate"][0], m["gate"][1], key))
-    lines.append("};")
-    lines.append("")
-    with open(inl_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(lines))
+        lines.append(",".join([m["key"], vec_list(coarse), vec_list(m["spots"]), '"%s"' % vec(m["wizard"]), '"%s"' % vec(m["gate"])]))
+    with open(csv_path, "w", encoding="utf-8-sig", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 ENEMY_ART = (
@@ -1359,7 +1353,7 @@ def make_sheet(sprites, path, names=None):
 
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "Generated")
-    inl_path = sys.argv[2] if len(sys.argv) > 2 else None
+    geometry_path = sys.argv[2] if len(sys.argv) > 2 else None
     os.makedirs(out_dir, exist_ok=True)
 
     paths = []
@@ -1369,9 +1363,9 @@ def main():
         if problems:
             print("WARNING %s: %s" % (m["key"], "; ".join(problems)))
         paths.append(path)
-    if inl_path:
-        write_maps_inl(paths, inl_path)
-        print("map inl ->", inl_path)
+    if geometry_path:
+        write_map_geometry(paths, geometry_path)
+        print("map geometry ->", geometry_path)
 
     sprites = build_all()
     for m, path in zip(map_data.MAPS, paths):

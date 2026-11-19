@@ -1,6 +1,6 @@
 ﻿# 그림(PNG)과 소리(WAV)를 생성하고 언리얼 에셋으로 임포트한다.
 # 에디터를 끈 상태에서 실행: powershell -File Tools/Art/BuildArt.ps1
-# -SkipImport 를 주면 PNG/WAV와 맵 데이터(YJJMaps.inl)만 다시 만든다.
+# -SkipImport 를 주면 PNG/WAV와 지도 모양(Content/YJJDefense/Data/MapGeometry.csv)만 다시 만든다.
 param(
     [string]$EngineDir = "D:\source\repos\UnrealEngine\Engine",
     [switch]$SkipImport
@@ -21,7 +21,7 @@ if (-not (Test-Path $Python)) {
     if ($LASTEXITCODE -ne 0) { throw "pip install pillow failed" }
 }
 
-& $Python (Join-Path $PSScriptRoot "generate_art.py") (Join-Path $PSScriptRoot "Generated") (Join-Path $ProjectDir "Source\YJJDefense\Game\YJJMaps.inl")
+& $Python (Join-Path $PSScriptRoot "generate_art.py") (Join-Path $PSScriptRoot "Generated") (Join-Path $ProjectDir "Content\YJJDefense\Data\MapGeometry.csv")
 if ($LASTEXITCODE -ne 0) { throw "generate_art.py failed" }
 & $Python (Join-Path $PSScriptRoot "..\Audio\generate_audio.py") (Join-Path $PSScriptRoot "..\Audio\Generated")
 if ($LASTEXITCODE -ne 0) { throw "generate_audio.py failed" }

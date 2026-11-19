@@ -1,7 +1,8 @@
 """맵 배치의 원본. 좌표는 1920x1080 가상 화면 (y는 아래로).
 
 generate_art.py가 이 값으로 배경 그림(T_Map01, T_Map02...)을 그리고,
-같은 값으로 Source/YJJDefense/Game/YJJMaps.inl을 써서 게임 규칙과 그림이 어긋나지 않게 한다.
+같은 값으로 Content/YJJDefense/Data/MapGeometry.csv를 써서 게임 규칙과 그림이 어긋나지 않게 한다.
+지도 이름·웨이브는 Content/YJJDefense/Data/Maps.csv, Waves.csv (key가 행 이름).
 
 화면에서 비워 둘 곳: 왼쪽 위 정보(x<720, y<80), 오른쪽 위 버튼(x>1760, y<80),
 아래 스펠 바(430<x<1490, y>905), 오른쪽 아래 웨이브 버튼(x>1690, y>945).

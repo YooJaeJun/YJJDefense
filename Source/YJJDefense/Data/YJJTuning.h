@@ -40,6 +40,9 @@ struct FYJJTuning
 	UPROPERTY() float SplitBackStep = 0.f;
 	UPROPERTY() float SplitSideSpread = 0.f;
 	UPROPERTY() float SplitLateralLimit = 0.f;
+	UPROPERTY() float TraitFastSpeed = 0.f;
+	UPROPERTY() float TraitArmor = 0.f;
+	UPROPERTY() float TraitMagicResist = 0.f;
 
 	// ---- 병졸 ----
 	UPROPERTY() float SoldierRespawn = 0.f;

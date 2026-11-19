@@ -1,318 +1,722 @@
 #include "Game/YJJGameData.h"
 #include "Algo/BinarySearch.h"
+#include "Data/YJJDataRows.h"
+#include "Data/YJJLoc.h"
+#include "Engine/DataTable.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "UI/YJJUIStyle.h"
+#include "UObject/Package.h"
+#include "YJJDefense.h"
 
-namespace
+FAutoConsoleCommand FYJJGameDatabase::ReloadCommand(
+	TEXT("yjj.ReloadData"),
+	TEXT("Content/YJJDefense/Data/*.csv 를 다시 읽는다 (글자 포함)"),
+	FConsoleCommandDelegate::CreateLambda([]
+	{
+		YJJLoc::Reload();
+		FYJJGameDatabase::Get().Reload();
+	}));
+
+FYJJGameDatabase::FYJJGameDatabase()
 {
-#include "Game/YJJMaps.inl"
-
-	const FYJJRuneDef GRunes[] = {
-		{ EYJJRune::Fire, EYJJElement::Fire, TEXT("불"), TEXT("파이어볼"), TEXT("맞은 적을 잠시 불태운다"), FLinearColor(1.f, 0.42f, 0.16f) },
-		{ EYJJRune::Ice, EYJJElement::Ice, TEXT("얼음"), TEXT("아이스볼"), TEXT("맞은 적을 느리게 한다"), FLinearColor(0.55f, 0.88f, 1.f) },
-		{ EYJJRune::Water, EYJJElement::Water, TEXT("물"), TEXT("워터볼"), TEXT("넓게 튀어 여럿을 적신다"), FLinearColor(0.25f, 0.55f, 1.f) },
-		{ EYJJRune::Lightning, EYJJElement::Lightning, TEXT("번개"), TEXT("라이트닝볼"), TEXT("강하게 때리고 잠깐 기절시킨다"), FLinearColor(1.f, 0.9f, 0.25f) },
-		{ EYJJRune::Poison, EYJJElement::Poison, TEXT("독"), TEXT("포이즌볼"), TEXT("오래가는 독을 건다"), FLinearColor(0.6f, 0.85f, 0.25f) },
-		{ EYJJRune::Wind, EYJJElement::Wind, TEXT("바람"), TEXT("윈드볼"), TEXT("적을 뒤로 밀어낸다"), FLinearColor(0.75f, 1.f, 0.85f) },
-		{ EYJJRune::Explosion, EYJJElement::None, TEXT("폭발"), TEXT("익스플로전"), TEXT("닿는 순간 넓게 터진다"), FLinearColor(1.f, 0.6f, 0.75f) },
-		{ EYJJRune::Chain, EYJJElement::None, TEXT("연쇄"), TEXT("체인"), TEXT("가까운 적에게 옮겨 붙는다"), FLinearColor(0.8f, 0.65f, 1.f) },
-		{ EYJJRune::Split, EYJJElement::None, TEXT("분열"), TEXT("스플릿"), TEXT("여러 발로 갈라져 나간다"), FLinearColor(1.f, 0.8f, 0.5f) },
-	};
-
-	const FYJJTowerDef GTowers[] = {
-		{ EYJJTower::Archer, TEXT("궁수 초소"), TEXT("빠르게 한 놈씩 쏜다. 하늘도 맞힌다"), false, true,
-			{ { 70, 13.f, 0.7f, 270.f, 0.f, 0.f, 0.f }, { 110, 21.f, 0.6f, 295.f, 0.f, 0.f, 0.f }, { 160, 32.f, 0.5f, 320.f, 0.f, 0.f, 0.f } } },
-		{ EYJJTower::Barracks, TEXT("보병 막사"), TEXT("병졸 셋이 길을 막고 싸운다"), false, false,
-			{ { 70, 5.f, 1.f, 0.f, 0.f, 65.f, 0.f }, { 110, 8.f, 1.f, 0.f, 0.f, 105.f, 0.15f }, { 160, 12.f, 0.9f, 0.f, 0.f, 155.f, 0.3f } } },
-		{ EYJJTower::Bombard, TEXT("대포"), TEXT("느리지만 넓게 터진다. 하늘은 못 맞힌다"), false, false,
-			{ { 125, 28.f, 2.8f, 290.f, 85.f, 0.f, 0.f }, { 220, 50.f, 2.8f, 310.f, 95.f, 0.f, 0.f }, { 320, 82.f, 2.6f, 330.f, 105.f, 0.f, 0.f } } },
-		{ EYJJTower::Mage, TEXT("마법사 탑"), TEXT("갑옷을 무시하는 마법 화살"), true, true,
-			{ { 100, 30.f, 1.5f, 250.f, 0.f, 0.f, 0.f }, { 160, 52.f, 1.5f, 270.f, 0.f, 0.f, 0.f }, { 240, 84.f, 1.4f, 290.f, 0.f, 0.f, 0.f } } },
-		{ EYJJTower::Shrine, TEXT("정령 제단"), TEXT("고른 원소를 적에게 묻혀 반응을 일으킨다"), true, true,
-			{ { 110, 7.f, 1.2f, 250.f, 55.f, 0.f, 0.f }, { 150, 11.f, 1.f, 265.f, 60.f, 0.f, 0.f }, { 200, 16.f, 0.8f, 280.f, 65.f, 0.f, 0.f } } },
-	};
-
-	const FYJJEnemyDef GEnemies[] = {
-		//                              이름              HP     속도   방어   마저   골드 목숨 비행   보스   근접  간격  반경  회복
-		{ EYJJEnemy::Imp, TEXT("꼬마 도깨비"), 55.f, 62.f, 0.f, 0.f, 6, 1, false, false, 4.f, 1.f, 18.f, 0.f },
-		{ EYJJEnemy::Chicken, TEXT("돌진 닭"), 38.f, 115.f, 0.f, 0.f, 5, 1, false, false, 3.f, 0.8f, 16.f, 0.f },
-		{ EYJJEnemy::Potato, TEXT("근육 감자"), 260.f, 40.f, 0.45f, 0.f, 18, 2, false, false, 14.f, 1.4f, 24.f, 0.f },
-		{ EYJJEnemy::Toast, TEXT("날개 식빵"), 60.f, 85.f, 0.f, 0.f, 8, 1, true, false, 0.f, 1.f, 18.f, 0.f },
-		{ EYJJEnemy::Mushroom, TEXT("응원 버섯"), 130.f, 48.f, 0.f, 0.4f, 14, 1, false, false, 3.f, 1.f, 20.f, 14.f },
-		{ EYJJEnemy::PuddingKing, TEXT("대왕 푸딩"), 3200.f, 26.f, 0.3f, 0.3f, 200, 20, false, true, 40.f, 1.6f, 46.f, 0.f },
-		// 해변
-		{ EYJJEnemy::Crab, TEXT("꽃게 병장"), 220.f, 52.f, 0.6f, 0.f, 16, 2, false, false, 12.f, 1.2f, 24.f, 0.f },
-		{ EYJJEnemy::Jellyfish, TEXT("둥실 해파리"), 85.f, 58.f, 0.f, 0.5f, 10, 1, true, false, 0.f, 1.f, 20.f, 0.f },
-		{ EYJJEnemy::Coconut, TEXT("코코넛 형님"), 140.f, 56.f, 0.3f, 0.f, 10, 1, false, false, 8.f, 1.1f, 22.f, 0.f, EYJJEnemy::CocoKid, 2 },
-		{ EYJJEnemy::CocoKid, TEXT("코코 알맹이"), 34.f, 100.f, 0.f, 0.f, 3, 1, false, false, 3.f, 0.8f, 15.f, 0.f },
-		{ EYJJEnemy::KingCrab, TEXT("왕꽃게"), 3200.f, 24.f, 0.6f, 0.15f, 260, 20, false, true, 45.f, 1.6f, 52.f, 0.f },
-		// 설산
-		{ EYJJEnemy::Snowman, TEXT("눈사람"), 170.f, 46.f, 0.1f, 0.1f, 10, 1, false, false, 6.f, 1.2f, 24.f, 0.f, EYJJEnemy::Snowball, 2 },
-		{ EYJJEnemy::Snowball, TEXT("눈뭉치"), 40.f, 105.f, 0.f, 0.f, 3, 1, false, false, 3.f, 0.8f, 16.f, 0.f },
-		{ EYJJEnemy::Penguin, TEXT("썰매 펭귄"), 75.f, 140.f, 0.f, 0.f, 8, 1, false, false, 3.f, 0.8f, 20.f, 0.f, EYJJEnemy::Count, 0, EYJJElement::Ice },
-		{ EYJJEnemy::Yeti, TEXT("예티"), 7000.f, 25.f, 0.25f, 0.25f, 300, 20, false, true, 70.f, 1.4f, 52.f, 0.f, EYJJEnemy::Count, 0, EYJJElement::Ice },
-	};
-	static_assert(UE_ARRAY_COUNT(GEnemies) == static_cast<int32>(EYJJEnemy::Count));
-
-	// ---- 꾸벅 들판 ----
-	const FYJJWaveGroup GMeadow1[] = { { EYJJEnemy::Imp, 8, 1.2f, 0.f } };
-	const FYJJWaveGroup GMeadow2[] = { { EYJJEnemy::Imp, 10, 1.f, 0.f }, { EYJJEnemy::Chicken, 4, 0.8f, 8.f } };
-	const FYJJWaveGroup GMeadow3[] = { { EYJJEnemy::Chicken, 10, 0.6f, 0.f }, { EYJJEnemy::Imp, 8, 1.f, 5.f } };
-	const FYJJWaveGroup GMeadow4[] = { { EYJJEnemy::Potato, 4, 3.f, 0.f }, { EYJJEnemy::Imp, 14, 0.8f, 2.f } };
-	const FYJJWaveGroup GMeadow5[] = { { EYJJEnemy::Toast, 10, 1.f, 0.f }, { EYJJEnemy::Imp, 12, 0.8f, 6.f }, { EYJJEnemy::Mushroom, 2, 5.f, 8.f } };
-	const FYJJWaveGroup GMeadow6[] = { { EYJJEnemy::Potato, 6, 2.5f, 0.f }, { EYJJEnemy::Mushroom, 2, 4.f, 4.f }, { EYJJEnemy::Chicken, 16, 0.5f, 6.f } };
-	const FYJJWaveGroup GMeadow7[] = { { EYJJEnemy::Toast, 14, 0.8f, 0.f }, { EYJJEnemy::Potato, 5, 2.5f, 3.f }, { EYJJEnemy::Imp, 20, 0.6f, 8.f } };
-	const FYJJWaveGroup GMeadow8[] = { { EYJJEnemy::Imp, 30, 0.45f, 0.f }, { EYJJEnemy::Mushroom, 4, 3.f, 3.f }, { EYJJEnemy::Chicken, 18, 0.45f, 12.f } };
-	const FYJJWaveGroup GMeadow9[] = { { EYJJEnemy::Potato, 10, 1.8f, 0.f }, { EYJJEnemy::Mushroom, 4, 3.f, 5.f }, { EYJJEnemy::Toast, 12, 0.7f, 6.f } };
-	const FYJJWaveGroup GMeadow10[] = { { EYJJEnemy::Imp, 20, 0.6f, 0.f }, { EYJJEnemy::PuddingKing, 1, 1.f, 6.f }, { EYJJEnemy::Potato, 4, 2.5f, 10.f },
-		{ EYJJEnemy::Toast, 8, 0.8f, 16.f }, { EYJJEnemy::Chicken, 10, 0.5f, 22.f } };
-	const TConstArrayView<FYJJWaveGroup> GMeadowWaves[] = { GMeadow1, GMeadow2, GMeadow3, GMeadow4, GMeadow5, GMeadow6, GMeadow7, GMeadow8, GMeadow9, GMeadow10 };
-
-	// ---- 꽃게 해변: 갑옷(꽃게)과 비행·마법 저항(해파리), 쪼개지는 코코넛 ----
-	const FYJJWaveGroup GBeach1[] = { { EYJJEnemy::Crab, 4, 2.f, 0.f }, { EYJJEnemy::Imp, 6, 1.f, 3.f } };
-	const FYJJWaveGroup GBeach2[] = { { EYJJEnemy::Coconut, 6, 1.4f, 0.f }, { EYJJEnemy::Chicken, 6, 0.7f, 4.f } };
-	const FYJJWaveGroup GBeach3[] = { { EYJJEnemy::Jellyfish, 8, 1.f, 0.f }, { EYJJEnemy::Crab, 4, 2.f, 4.f } };
-	const FYJJWaveGroup GBeach4[] = { { EYJJEnemy::Coconut, 10, 1.f, 0.f }, { EYJJEnemy::Crab, 4, 2.f, 6.f } };
-	const FYJJWaveGroup GBeach5[] = { { EYJJEnemy::Jellyfish, 10, 0.8f, 0.f }, { EYJJEnemy::Mushroom, 2, 4.f, 4.f }, { EYJJEnemy::Coconut, 8, 1.f, 8.f } };
-	const FYJJWaveGroup GBeach6[] = { { EYJJEnemy::Crab, 8, 1.6f, 0.f }, { EYJJEnemy::Jellyfish, 8, 0.8f, 6.f } };
-	const FYJJWaveGroup GBeach7[] = { { EYJJEnemy::Coconut, 14, 0.7f, 0.f }, { EYJJEnemy::Potato, 4, 2.5f, 4.f }, { EYJJEnemy::Jellyfish, 8, 0.8f, 10.f } };
-	const FYJJWaveGroup GBeach8[] = { { EYJJEnemy::Crab, 8, 1.4f, 0.f }, { EYJJEnemy::Mushroom, 3, 3.f, 4.f }, { EYJJEnemy::Chicken, 16, 0.45f, 10.f } };
-	const FYJJWaveGroup GBeach9[] = { { EYJJEnemy::Jellyfish, 14, 0.7f, 0.f }, { EYJJEnemy::Coconut, 12, 0.8f, 5.f }, { EYJJEnemy::Crab, 6, 1.5f, 10.f } };
-	const FYJJWaveGroup GBeach10[] = { { EYJJEnemy::Coconut, 8, 0.9f, 0.f }, { EYJJEnemy::KingCrab, 1, 1.f, 6.f }, { EYJJEnemy::Crab, 4, 2.f, 10.f },
-		{ EYJJEnemy::Jellyfish, 10, 0.8f, 16.f } };
-	const TConstArrayView<FYJJWaveGroup> GBeachWaves[] = { GBeach1, GBeach2, GBeach3, GBeach4, GBeach5, GBeach6, GBeach7, GBeach8, GBeach9, GBeach10 };
-
-	// ---- 덜덜 설산: 녹으면 둘이 되는 눈사람, 얼음이 안 통하는 펭귄 ----
-	const FYJJWaveGroup GSnow1[] = { { EYJJEnemy::Snowman, 6, 1.6f, 0.f } };
-	const FYJJWaveGroup GSnow2[] = { { EYJJEnemy::Penguin, 6, 1.f, 0.f }, { EYJJEnemy::Snowman, 4, 1.6f, 4.f } };
-	const FYJJWaveGroup GSnow3[] = { { EYJJEnemy::Snowman, 8, 1.2f, 0.f }, { EYJJEnemy::Imp, 10, 0.7f, 3.f } };
-	const FYJJWaveGroup GSnow4[] = { { EYJJEnemy::Penguin, 10, 0.6f, 0.f }, { EYJJEnemy::Potato, 4, 2.5f, 4.f } };
-	const FYJJWaveGroup GSnow5[] = { { EYJJEnemy::Toast, 10, 0.8f, 0.f }, { EYJJEnemy::Snowman, 8, 1.f, 5.f } };
-	const FYJJWaveGroup GSnow6[] = { { EYJJEnemy::Penguin, 18, 0.45f, 0.f }, { EYJJEnemy::Mushroom, 3, 3.f, 3.f }, { EYJJEnemy::Snowman, 6, 1.2f, 6.f } };
-	const FYJJWaveGroup GSnow7[] = { { EYJJEnemy::Snowman, 12, 0.9f, 0.f }, { EYJJEnemy::Toast, 10, 0.7f, 6.f }, { EYJJEnemy::Potato, 5, 2.f, 10.f } };
-	const FYJJWaveGroup GSnow8[] = { { EYJJEnemy::Penguin, 24, 0.4f, 0.f }, { EYJJEnemy::Snowman, 12, 0.9f, 6.f } };
-	const FYJJWaveGroup GSnow9[] = { { EYJJEnemy::Potato, 10, 1.5f, 0.f }, { EYJJEnemy::Mushroom, 4, 3.f, 3.f }, { EYJJEnemy::Penguin, 16, 0.45f, 8.f },
-		{ EYJJEnemy::Toast, 10, 0.7f, 12.f } };
-	const FYJJWaveGroup GSnow10[] = { { EYJJEnemy::Snowman, 14, 0.8f, 0.f }, { EYJJEnemy::Yeti, 1, 1.f, 6.f }, { EYJJEnemy::Penguin, 20, 0.45f, 10.f },
-		{ EYJJEnemy::Snowman, 8, 1.f, 16.f } };
-	const TConstArrayView<FYJJWaveGroup> GSnowWaves[] = { GSnow1, GSnow2, GSnow3, GSnow4, GSnow5, GSnow6, GSnow7, GSnow8, GSnow9, GSnow10 };
-
-	const EYJJEnemy GMeadowShowcase[] = { EYJJEnemy::Imp, EYJJEnemy::Chicken, EYJJEnemy::Potato, EYJJEnemy::Toast, EYJJEnemy::Mushroom, EYJJEnemy::PuddingKing };
-	const EYJJEnemy GBeachShowcase[] = { EYJJEnemy::Crab, EYJJEnemy::Jellyfish, EYJJEnemy::Coconut, EYJJEnemy::KingCrab };
-	const EYJJEnemy GSnowShowcase[] = { EYJJEnemy::Snowman, EYJJEnemy::Penguin, EYJJEnemy::Yeti };
-
-	struct FYJJMapDef
+	for (int32 Disk = 0; Disk < YJJ::NumDisks; ++Disk)
 	{
-		const TCHAR* Name;
-		const TCHAR* Desc;
-		TConstArrayView<TConstArrayView<FYJJWaveGroup>> Waves;
-		TConstArrayView<EYJJEnemy> Showcase;
-	};
-
-	const FYJJMapDef GMaps[] = {
-		{ TEXT("꾸벅 들판"), TEXT("졸린 도깨비와 닭이 길을 막는다"), GMeadowWaves, GMeadowShowcase },
-		{ TEXT("꽃게 해변"), TEXT("단단한 꽃게는 마법으로, 해파리는 하늘을 노려라"), GBeachWaves, GBeachShowcase },
-		{ TEXT("덜덜 설산"), TEXT("눈사람은 녹으면 둘이 된다. 펭귄은 얼지 않는다"), GSnowWaves, GSnowShowcase },
-	};
-	static_assert(UE_ARRAY_COUNT(GMaps) == UE_ARRAY_COUNT(GMapGeometry), "맵 데이터(GMaps)와 생성된 맵 모양(YJJMaps.inl) 개수가 다르다");
-
-	int32 GActiveMap = 0;
-
-	const FYJJMapGeometry& Geo()
-	{
-		return GMapGeometry[GActiveMap];
-	}
-
-	// 길 누적 거리 (맵마다 처음 쓸 때 한 번 계산)
-	const TArray<float>& PathCumulative()
-	{
-		static TArray<float> Cumulative[UE_ARRAY_COUNT(GMapGeometry)];
-		TArray<float>& Result = Cumulative[GActiveMap];
-		if (Result.IsEmpty())
+		for (int32 Socket = 0; Socket < YJJ::NumSockets; ++Socket)
 		{
-			const TConstArrayView<FVector2f> Path = Geo().Path;
-			Result.Reserve(Path.Num());
-			float Total = 0.f;
-			Result.Add(0.f);
-			for (int32 Index = 1; Index < Path.Num(); ++Index)
-			{
-				Total += FVector2f::Distance(Path[Index - 1], Path[Index]);
-				Result.Add(Total);
-			}
+			StartDisks[Disk][Socket] = EYJJRune::None;
 		}
-		return Result;
+	}
+	for (int32 A = 0; A < static_cast<int32>(EYJJElement::Count); ++A)
+	{
+		for (int32 B = 0; B < static_cast<int32>(EYJJElement::Count); ++B)
+		{
+			PairReactions[A][B] = EYJJReaction::None;
+		}
 	}
 }
 
-namespace YJJData
+FYJJGameDatabase& FYJJGameDatabase::Get()
 {
-	const FYJJRuneDef& Rune(EYJJRune Rune)
+	static FYJJGameDatabase Instance;
+	if (!Instance.bLoaded)
 	{
-		return GRunes[FMath::Clamp<int32>(static_cast<int32>(Rune), 0, UE_ARRAY_COUNT(GRunes) - 1)];
+		Instance.Load();
 	}
+	return Instance;
+}
 
-	const FYJJTowerDef& Tower(EYJJTower Tower)
+void FYJJGameDatabase::Reload()
+{
+	const int32 KeepMap = ActiveMap;
+	for (UDataTable* Table : Tables)
 	{
-		return GTowers[FMath::Clamp<int32>(static_cast<int32>(Tower), 0, UE_ARRAY_COUNT(GTowers) - 1)];
+		Table->RemoveFromRoot();
 	}
+	*this = FYJJGameDatabase();
+	Load();
+	ActiveMap = FMath::Clamp(KeepMap, 0, FMath::Max(Maps.Num() - 1, 0));
+}
 
-	const FYJJEnemyDef& Enemy(EYJJEnemy Enemy)
+void FYJJGameDatabase::Problem(const FString& Message)
+{
+	Problems.Add(Message);
+	UE_LOG(LogYJJDefense, Warning, TEXT("[Data] %s"), *Message);
+}
+
+FString FYJJGameDatabase::DataPath(const TCHAR* File)
+{
+	return FPaths::ProjectContentDir() / TEXT("YJJDefense/Data") / File;
+}
+
+FLinearColor FYJJGameDatabase::ParseColor(const FString& Hex)
+{
+	return FColor::FromHex(Hex).ReinterpretAsLinear();
+}
+
+UDataTable* FYJJGameDatabase::LoadTable(const TCHAR* File, UScriptStruct* RowStruct)
+{
+	UDataTable* Table = NewObject<UDataTable>(GetTransientPackage(), NAME_None, RF_Transient);
+	Table->RowStruct = RowStruct;
+	Table->AddToRoot();
+	Tables.Add(Table);
+
+	FString Csv;
+	if (!FFileHelper::LoadFileToString(Csv, *DataPath(File)))
 	{
-		return GEnemies[FMath::Clamp<int32>(static_cast<int32>(Enemy), 0, UE_ARRAY_COUNT(GEnemies) - 1)];
+		Problem(FString::Printf(TEXT("%s 를 읽지 못했다 (%s)"), File, *DataPath(File)));
+		return Table;
 	}
-
-	int32 NumWaves()
+	for (const FString& Message : Table->CreateTableFromCSVString(Csv))
 	{
-		return GMaps[GActiveMap].Waves.Num();
+		Problem(FString::Printf(TEXT("%s: %s"), File, *Message));
 	}
+	UE_LOG(LogYJJDefense, Verbose, TEXT("[Data] %s: %d rows"), File, Table->GetRowMap().Num());
+	return Table;
+}
 
-	TConstArrayView<FYJJWaveGroup> Wave(int32 Index)
+void FYJJGameDatabase::FillNameValues(const TCHAR* File, const UScriptStruct* Struct, void* Data)
+{
+	const UDataTable* Table = LoadTable(File, FYJJNameValueRow::StaticStruct());
+	TSet<FName> Used;
+	for (TFieldIterator<FProperty> It(Struct); It; ++It)
 	{
-		const TConstArrayView<TConstArrayView<FYJJWaveGroup>> Waves = GMaps[GActiveMap].Waves;
-		return Waves[FMath::Clamp<int32>(Index, 0, Waves.Num() - 1)];
-	}
-
-	FString EnemyTraits(EYJJEnemy Type)
-	{
-		const FYJJEnemyDef& Def = Enemy(Type);
-		TArray<FString> Traits;
-		if (Def.bBoss) { Traits.Add(TEXT("보스")); }
-		if (Def.bFlying) { Traits.Add(TEXT("비행")); }
-		if (Def.Speed >= 110.f) { Traits.Add(TEXT("빠름")); }
-		if (Def.Armor >= 0.4f) { Traits.Add(TEXT("갑옷")); }
-		if (Def.MagicResist >= 0.4f) { Traits.Add(TEXT("마법 저항")); }
-		if (Def.HealPerSecond > 0.f) { Traits.Add(TEXT("회복")); }
-		if (Def.HasSplit()) { Traits.Add(TEXT("쪼개짐")); }
-		if (Def.Immune == EYJJElement::Ice) { Traits.Add(TEXT("둔화·빙결 면역")); }
-		return FString::Join(Traits, TEXT(", "));
-	}
-
-	const TCHAR* ElementName(EYJJElement Element)
-	{
-		switch (Element)
+		const FNumericProperty* Number = CastField<FNumericProperty>(*It);
+		if (!Number)
 		{
-		case EYJJElement::Fire: return TEXT("불");
-		case EYJJElement::Ice: return TEXT("얼음");
-		case EYJJElement::Water: return TEXT("물");
-		case EYJJElement::Lightning: return TEXT("번개");
-		case EYJJElement::Poison: return TEXT("독");
-		case EYJJElement::Wind: return TEXT("바람");
-		default: return TEXT("비전");
+			continue;
+		}
+		const FName Name = Number->GetFName();
+		const FYJJNameValueRow* Row = Table->FindRow<FYJJNameValueRow>(Name, TEXT("YJJData"), false);
+		if (!Row)
+		{
+			Problem(FString::Printf(TEXT("%s 에 %s 가 없다"), File, *Name.ToString()));
+			continue;
+		}
+		Used.Add(Name);
+		void* Value = Number->ContainerPtrToValuePtr<void>(Data);
+		if (Number->IsFloatingPoint())
+		{
+			Number->SetFloatingPointPropertyValue(Value, Row->Value);
+		}
+		else
+		{
+			Number->SetIntPropertyValue(Value, static_cast<int64>(FMath::RoundToInt(Row->Value)));
 		}
 	}
-
-	FLinearColor ElementColor(EYJJElement Element)
+	for (const FName& RowName : Table->GetRowNames())
 	{
-		if (Element == EYJJElement::None || Element == EYJJElement::Count)
+		if (!Used.Contains(RowName))
 		{
-			return FLinearColor(0.85f, 0.6f, 1.f);
+			Problem(FString::Printf(TEXT("%s 의 %s 는 쓰는 곳이 없다"), File, *RowName.ToString()));
 		}
-		return Rune(ElementRune(Element)).Color;
 	}
 }
 
-namespace YJJMap
+void FYJJGameDatabase::Load()
 {
-	int32 NumMaps()
+	bLoaded = true;
+	Tables.Reset();
+
+	FillNameValues(TEXT("Tuning.csv"), FYJJTuning::StaticStruct(), &Tuning);
+	FillNameValues(TEXT("UILayout.csv"), FYJJUILayout::StaticStruct(), &Layout);
+	LoadRunes();
+	LoadReactions();
+	LoadTowers();
+	LoadEnemies();
+	LoadMaps();
+	LoadWaves();
+	LoadUnlocks();
+	LoadStartDisks();
+	LoadBot();
+	LoadSounds();
+	Validate();
+	UE_LOG(LogYJJDefense, Display, TEXT("[Data] loaded: %d runes, %d towers, %d enemies, %d maps, %d problems"), Runes.Num(), Towers.Num(), Enemies.Num(), Maps.Num(), Problems.Num());
+}
+
+void FYJJGameDatabase::LoadRunes()
+{
+	const UDataTable* Table = LoadTable(TEXT("Runes.csv"), FYJJRuneRow::StaticStruct());
+	const UEnum* Enum = StaticEnum<EYJJRune>();
+	Runes.SetNum(static_cast<int32>(EYJJRune::Count));
+	for (int32 Index = 0; Index < Runes.Num(); ++Index)
 	{
-		return UE_ARRAY_COUNT(GMaps);
-	}
-
-	void SetActive(int32 Map)
-	{
-		GActiveMap = FMath::Clamp(Map, 0, NumMaps() - 1);
-	}
-
-	int32 GetActive()
-	{
-		return GActiveMap;
-	}
-
-	const TCHAR* Name(int32 Map)
-	{
-		return GMaps[FMath::Clamp(Map, 0, NumMaps() - 1)].Name;
-	}
-
-	const TCHAR* Desc(int32 Map)
-	{
-		return GMaps[FMath::Clamp(Map, 0, NumMaps() - 1)].Desc;
-	}
-
-	const TCHAR* Texture(int32 Map)
-	{
-		return GMapGeometry[FMath::Clamp(Map, 0, NumMaps() - 1)].Texture;
-	}
-
-	TConstArrayView<EYJJEnemy> Showcase(int32 Map)
-	{
-		return GMaps[FMath::Clamp(Map, 0, NumMaps() - 1)].Showcase;
-	}
-
-	TConstArrayView<FVector2f> Path()
-	{
-		return Geo().Path;
-	}
-
-	float PathLength()
-	{
-		return PathCumulative().Last();
-	}
-
-	FVector2f PointAt(float Dist, float Lateral, FVector2f* OutDirection)
-	{
-		const TArray<float>& Cumulative = PathCumulative();
-		const int32 Num = Cumulative.Num();
-		Dist = FMath::Clamp(Dist, 0.f, Cumulative.Last());
-
-		// Cumulative[Index] <= Dist 인 마지막 구간
-		int32 Index = Algo::UpperBound(Cumulative, Dist) - 1;
-		Index = FMath::Clamp(Index, 0, Num - 2);
-
-		const TConstArrayView<FVector2f> Path = Geo().Path;
-		const FVector2f A = Path[Index];
-		const FVector2f B = Path[Index + 1];
-		const float SegmentLength = FMath::Max(Cumulative[Index + 1] - Cumulative[Index], KINDA_SMALL_NUMBER);
-		const FVector2f Direction = (B - A) / SegmentLength;
-		if (OutDirection)
+		const FString Name = Enum->GetNameStringByValue(Index);
+		const FYJJRuneRow* Row = Table->FindRow<FYJJRuneRow>(FName(*Name), TEXT("YJJData"), false);
+		if (!Row)
 		{
-			*OutDirection = Direction;
+			Problem(FString::Printf(TEXT("Runes.csv 에 %s 가 없다"), *Name));
+			continue;
 		}
-		const FVector2f Right(-Direction.Y, Direction.X);
-		return A + Direction * (Dist - Cumulative[Index]) + Right * Lateral;
+		FYJJRuneDef& Def = Runes[Index];
+		Def.Rune = static_cast<EYJJRune>(Index);
+		Def.Element = Row->Element;
+		Def.NameKey = Row->NameKey;
+		Def.SpellKey = Row->SpellKey;
+		Def.DescKey = Row->DescKey;
+		Def.Art = Row->Art;
+		Def.Color = ParseColor(Row->Color);
+		Def.BurnScale = Row->BurnScale;
+		Def.BurnTime = Row->BurnTime;
+		Def.SlowFactor = Row->SlowFactor;
+		Def.SlowTime = Row->SlowTime;
+		Def.StunTime = Row->StunTime;
+		Def.PoisonScale = Row->PoisonScale;
+		Def.PoisonTime = Row->PoisonTime;
+		Def.Knockback = Row->Knockback;
+		Def.SpellDamageMult = Row->SpellDamageMult;
+		Def.SpellRadiusBonus = Row->SpellRadiusBonus;
 	}
+}
 
-	float NearestDist(const FVector2f& Pos)
+void FYJJGameDatabase::LoadReactions()
+{
+	const UDataTable* Table = LoadTable(TEXT("Reactions.csv"), FYJJReactionRow::StaticStruct());
+	const UEnum* Enum = StaticEnum<EYJJReaction>();
+	Reactions.SetNum(static_cast<int32>(EYJJReaction::Count));
+	for (int32 Index = static_cast<int32>(EYJJReaction::None) + 1; Index < Reactions.Num(); ++Index)
 	{
-		const TArray<float>& Cumulative = PathCumulative();
-		const TConstArrayView<FVector2f> Path = Geo().Path;
-		float BestDist = 0.f;
-		float BestSq = TNumericLimits<float>::Max();
-		for (int32 Index = 0; Index + 1 < Cumulative.Num(); ++Index)
+		const FString Name = Enum->GetNameStringByValue(Index);
+		const FYJJReactionRow* Row = Table->FindRow<FYJJReactionRow>(FName(*Name), TEXT("YJJData"), false);
+		if (!Row)
 		{
-			const FVector2f A = Path[Index];
-			const FVector2f AB = Path[Index + 1] - A;
-			const float LengthSq = FMath::Max(AB.SizeSquared(), KINDA_SMALL_NUMBER);
-			const float T = FMath::Clamp(FVector2f::DotProduct(Pos - A, AB) / LengthSq, 0.f, 1.f);
-			const float Sq = FVector2f::DistSquared(Pos, A + AB * T);
-			if (Sq < BestSq)
+			Problem(FString::Printf(TEXT("Reactions.csv 에 %s 가 없다"), *Name));
+			continue;
+		}
+		FYJJReactionDef& Def = Reactions[Index];
+		Def.Reaction = static_cast<EYJJReaction>(Index);
+		Def.ElementA = Row->ElementA;
+		Def.ElementB = Row->ElementB;
+		Def.NameKey = Row->NameKey;
+		Def.SpellKey = Row->SpellKey;
+		Def.DescKey = Row->DescKey;
+		Def.Color = ParseColor(Row->Color);
+		Def.Radius = Row->Radius;
+		Def.FxRadius = Row->FxRadius;
+		Def.Damage = Row->Damage;
+		Def.Knockback = Row->Knockback;
+		Def.BurnScale = Row->BurnScale;
+		Def.BurnTime = Row->BurnTime;
+		Def.PoisonScale = Row->PoisonScale;
+		Def.PoisonTime = Row->PoisonTime;
+		Def.SlowFactor = Row->SlowFactor;
+		Def.SlowTime = Row->SlowTime;
+		Def.StunTime = Row->StunTime;
+		Def.FreezeTime = Row->FreezeTime;
+		Def.VulnMult = Row->VulnMult;
+		Def.VulnTime = Row->VulnTime;
+		Def.Targets = Row->Targets;
+		Def.ZoneTime = Row->ZoneTime;
+		Def.ZoneDps = Row->ZoneDps;
+		Def.ZoneSlow = Row->ZoneSlow;
+		Def.ZoneBurn = Row->ZoneBurn;
+		Def.bZoneGroundOnly = Row->ZoneGroundOnly;
+
+		const int32 A = static_cast<int32>(Row->ElementA);
+		const int32 B = static_cast<int32>(Row->ElementB);
+		if (Row->ElementA == EYJJElement::None || Row->ElementB == EYJJElement::None || A == B)
+		{
+			Problem(FString::Printf(TEXT("Reactions.csv %s: 서로 다른 원소 둘이 필요하다"), *Name));
+			continue;
+		}
+		if (PairReactions[A][B] != EYJJReaction::None)
+		{
+			Problem(FString::Printf(TEXT("Reactions.csv %s: 원소 짝이 겹친다"), *Name));
+		}
+		PairReactions[A][B] = Def.Reaction;
+		PairReactions[B][A] = Def.Reaction;
+	}
+}
+
+void FYJJGameDatabase::LoadTowers()
+{
+	const UDataTable* Table = LoadTable(TEXT("Towers.csv"), FYJJTowerRow::StaticStruct());
+	const UEnum* Enum = StaticEnum<EYJJTower>();
+	Towers.SetNum(static_cast<int32>(EYJJTower::Count));
+	for (int32 Index = 0; Index < Towers.Num(); ++Index)
+	{
+		const FString Name = Enum->GetNameStringByValue(Index);
+		const FYJJTowerRow* Row = Table->FindRow<FYJJTowerRow>(FName(*Name), TEXT("YJJData"), false);
+		if (!Row)
+		{
+			Problem(FString::Printf(TEXT("Towers.csv 에 %s 가 없다"), *Name));
+			continue;
+		}
+		FYJJTowerDef& Def = Towers[Index];
+		Def.Type = static_cast<EYJJTower>(Index);
+		Def.NameKey = Row->NameKey;
+		Def.DescKey = Row->DescKey;
+		Def.Art = Row->Art;
+		Def.bMagic = Row->Magic;
+		Def.bHitsAir = Row->HitsAir;
+		Def.Projectile = Row->Projectile;
+		Def.ShotSpeed = Row->ShotSpeed;
+		Def.ShotTime = Row->ShotTime;
+		Def.ShotArcRatio = Row->ShotArcRatio;
+		Def.ShotArcHeight = Row->ShotArcHeight;
+		Def.bHoming = Row->Homing;
+		Def.bLeadTarget = Row->LeadTarget;
+
+		const int32 Costs[YJJ::NumTowerLevels] = { Row->Cost1, Row->Cost2, Row->Cost3 };
+		const float Damages[YJJ::NumTowerLevels] = { Row->Damage1, Row->Damage2, Row->Damage3 };
+		const float Intervals[YJJ::NumTowerLevels] = { Row->Interval1, Row->Interval2, Row->Interval3 };
+		const float Ranges[YJJ::NumTowerLevels] = { Row->Range1, Row->Range2, Row->Range3 };
+		const float Splashes[YJJ::NumTowerLevels] = { Row->Splash1, Row->Splash2, Row->Splash3 };
+		const float SoldierHPs[YJJ::NumTowerLevels] = { Row->SoldierHP1, Row->SoldierHP2, Row->SoldierHP3 };
+		const float SoldierArmors[YJJ::NumTowerLevels] = { Row->SoldierArmor1, Row->SoldierArmor2, Row->SoldierArmor3 };
+		for (int32 Level = 0; Level < YJJ::NumTowerLevels; ++Level)
+		{
+			Def.Levels[Level] = { Costs[Level], Damages[Level], Intervals[Level], Ranges[Level], Splashes[Level], SoldierHPs[Level], SoldierArmors[Level] };
+		}
+	}
+}
+
+void FYJJGameDatabase::LoadEnemies()
+{
+	const UDataTable* Table = LoadTable(TEXT("Enemies.csv"), FYJJEnemyRow::StaticStruct());
+	const UEnum* Enum = StaticEnum<EYJJEnemy>();
+	Enemies.SetNum(static_cast<int32>(EYJJEnemy::Count));
+	for (int32 Index = 0; Index < Enemies.Num(); ++Index)
+	{
+		const FString Name = Enum->GetNameStringByValue(Index);
+		const FYJJEnemyRow* Row = Table->FindRow<FYJJEnemyRow>(FName(*Name), TEXT("YJJData"), false);
+		if (!Row)
+		{
+			Problem(FString::Printf(TEXT("Enemies.csv 에 %s 가 없다"), *Name));
+			continue;
+		}
+		FYJJEnemyDef& Def = Enemies[Index];
+		Def.Type = static_cast<EYJJEnemy>(Index);
+		Def.NameKey = Row->NameKey;
+		Def.Art = Row->Art;
+		Def.HP = Row->HP;
+		Def.Speed = Row->Speed;
+		Def.Armor = Row->Armor;
+		Def.MagicResist = Row->MagicResist;
+		Def.Gold = Row->Gold;
+		Def.LifeCost = Row->LifeCost;
+		Def.bFlying = Row->Flying;
+		Def.bBoss = Row->Boss;
+		Def.MeleeDamage = Row->MeleeDamage;
+		Def.MeleeInterval = Row->MeleeInterval;
+		Def.Radius = Row->Radius;
+		Def.HealPerSecond = Row->HealPerSecond;
+		Def.SplitInto = Row->SplitInto;
+		Def.SplitCount = Row->SplitCount;
+		Def.Immune = Row->Immune;
+	}
+}
+
+void FYJJGameDatabase::LoadMaps()
+{
+	const UDataTable* Table = LoadTable(TEXT("Maps.csv"), FYJJMapRow::StaticStruct());
+	const UDataTable* Geometry = LoadTable(TEXT("MapGeometry.csv"), FYJJMapGeometryRow::StaticStruct());
+
+	TArray<TPair<int32, FName>> Order;
+	Table->ForeachRow<FYJJMapRow>(TEXT("YJJData"), [&Order](const FName& Key, const FYJJMapRow& Row)
+	{
+		Order.Add({ Row.Order, Key });
+	});
+	Order.StableSort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; });
+
+	for (const TPair<int32, FName>& Entry : Order)
+	{
+		const FYJJMapRow* Row = Table->FindRow<FYJJMapRow>(Entry.Value, TEXT("YJJData"));
+		const FYJJMapGeometryRow* Shape = Geometry->FindRow<FYJJMapGeometryRow>(Entry.Value, TEXT("YJJData"), false);
+		if (!Shape)
+		{
+			Problem(FString::Printf(TEXT("MapGeometry.csv 에 %s 가 없다 (Tools/Art/BuildArt.ps1 -SkipImport)"), *Entry.Value.ToString()));
+			continue;
+		}
+
+		FYJJMapDef& Def = Maps.AddDefaulted_GetRef();
+		Def.Key = Entry.Value;
+		Def.NameKey = Row->NameKey;
+		Def.DescKey = Row->DescKey;
+		Def.Texture = Row->Texture;
+		Def.Showcase = Row->Showcase;
+		Def.Wizard = FVector2f(Shape->Wizard);
+		Def.Gate = FVector2f(Shape->Gate);
+		for (const FVector2D& Point : Shape->Path)
+		{
+			Def.Path.Add(FVector2f(Point));
+		}
+		for (const FVector2D& Point : Shape->Spots)
+		{
+			Def.Spots.Add(FVector2f(Point));
+		}
+
+		float Total = 0.f;
+		Def.PathCumulative.Add(Total);
+		for (int32 Index = 1; Index < Def.Path.Num(); ++Index)
+		{
+			Total += FVector2f::Distance(Def.Path[Index - 1], Def.Path[Index]);
+			Def.PathCumulative.Add(Total);
+		}
+	}
+}
+
+void FYJJGameDatabase::LoadWaves()
+{
+	const UDataTable* Table = LoadTable(TEXT("Waves.csv"), FYJJWaveRow::StaticStruct());
+	Table->ForeachRow<FYJJWaveRow>(TEXT("YJJData"), [this](const FName& Key, const FYJJWaveRow& Row)
+	{
+		FYJJMapDef* Map = Maps.FindByPredicate([&Row](const FYJJMapDef& Def) { return Def.Key == Row.Map; });
+		if (!Map || Row.Wave < 1 || Row.Enemy >= EYJJEnemy::Count)
+		{
+			Problem(FString::Printf(TEXT("Waves.csv %s: 지도·웨이브·몬스터가 맞지 않다"), *Key.ToString()));
+			return;
+		}
+		if (Map->Waves.Num() < Row.Wave)
+		{
+			Map->Waves.SetNum(Row.Wave);
+		}
+		Map->Waves[Row.Wave - 1].Add({ Row.Enemy, Row.Count, Row.Interval, Row.Delay });
+	});
+}
+
+void FYJJGameDatabase::LoadUnlocks()
+{
+	const UDataTable* Table = LoadTable(TEXT("Unlocks.csv"), FYJJUnlockRow::StaticStruct());
+	TArray<TPair<int32, FYJJUnlock>> Track;
+	Table->ForeachRow<FYJJUnlockRow>(TEXT("YJJData"), [this, &Track](const FName& Key, const FYJJUnlockRow& Row)
+	{
+		const bool bRune = Row.Rune < EYJJRune::Count;
+		const bool bTower = Row.Tower < EYJJTower::Count;
+		if (bRune == bTower)
+		{
+			Problem(FString::Printf(TEXT("Unlocks.csv %s: Rune이나 Tower 중 하나만 적는다"), *Key.ToString()));
+			return;
+		}
+		const uint32 Bit = 1u << (bRune ? static_cast<uint32>(Row.Rune) : static_cast<uint32>(Row.Tower));
+		if (Row.Points <= 0)
+		{
+			(bRune ? StartRuneMask : StartTowerMask) |= Bit;
+			return;
+		}
+		FYJJUnlock Unlock;
+		Unlock.bTower = bTower;
+		Unlock.Index = bRune ? static_cast<uint8>(Row.Rune) : static_cast<uint8>(Row.Tower);
+		Unlock.PointsNeeded = Row.Points;
+		Track.Add({ Row.Order, Unlock });
+	});
+	Track.StableSort([](const TPair<int32, FYJJUnlock>& A, const TPair<int32, FYJJUnlock>& B) { return A.Key < B.Key; });
+	for (const TPair<int32, FYJJUnlock>& Entry : Track)
+	{
+		UnlockTrack.Add(Entry.Value);
+	}
+}
+
+void FYJJGameDatabase::LoadStartDisks()
+{
+	const UDataTable* Table = LoadTable(TEXT("StartDisks.csv"), FYJJStartDiskRow::StaticStruct());
+	int32 Disk = 0;
+	Table->ForeachRow<FYJJStartDiskRow>(TEXT("YJJData"), [this, &Disk](const FName& Key, const FYJJStartDiskRow& Row)
+	{
+		if (Disk < YJJ::NumDisks)
+		{
+			StartDisks[Disk][0] = Row.Rune1;
+			StartDisks[Disk][1] = Row.Rune2;
+		}
+		Disk++;
+	});
+	if (Disk != YJJ::NumDisks)
+	{
+		Problem(FString::Printf(TEXT("StartDisks.csv: 디스크는 %d개여야 한다 (%d개)"), YJJ::NumDisks, Disk));
+	}
+}
+
+void FYJJGameDatabase::LoadBot()
+{
+	const UDataTable* Table = LoadTable(TEXT("BotBuildOrder.csv"), FYJJBotBuildRow::StaticStruct());
+	Table->ForeachRow<FYJJBotBuildRow>(TEXT("YJJData"), [this](const FName& Key, const FYJJBotBuildRow& Row)
+	{
+		BotBuildPattern.Add(Row.Tower);
+	});
+}
+
+void FYJJGameDatabase::LoadSounds()
+{
+	const UDataTable* Table = LoadTable(TEXT("Sounds.csv"), FYJJSoundRow::StaticStruct());
+	Table->ForeachRow<FYJJSoundRow>(TEXT("YJJData"), [this](const FName& Key, const FYJJSoundRow& Row)
+	{
+		Sounds.Add(Key, { Row.Sound, Row.Volume });
+	});
+}
+
+void FYJJGameDatabase::Validate()
+{
+	if (Maps.IsEmpty())
+	{
+		Problem(TEXT("지도가 하나도 없다"));
+		Maps.AddDefaulted();
+	}
+	for (FYJJMapDef& Map : Maps)
+	{
+		if (Map.Path.Num() < 2)
+		{
+			Problem(FString::Printf(TEXT("%s: 길이 너무 짧다"), *Map.Key.ToString()));
+			Map.Path = { FVector2f::ZeroVector, FVector2f(YJJ::ViewW, 0.f) };
+			Map.PathCumulative = { 0.f, YJJ::ViewW };
+		}
+		if (Map.Waves.IsEmpty())
+		{
+			Problem(FString::Printf(TEXT("%s: 웨이브가 없다"), *Map.Key.ToString()));
+			Map.Waves.AddDefaulted();
+		}
+		for (int32 Wave = 0; Wave < Map.Waves.Num(); ++Wave)
+		{
+			if (Map.Waves[Wave].IsEmpty())
 			{
-				BestSq = Sq;
-				BestDist = Cumulative[Index] + FMath::Sqrt(LengthSq) * T;
+				Problem(FString::Printf(TEXT("%s: 웨이브 %d 가 비었다"), *Map.Key.ToString(), Wave + 1));
 			}
 		}
-		return BestDist;
 	}
-
-	TConstArrayView<FVector2f> Spots()
+	if (BotBuildPattern.IsEmpty())
 	{
-		return Geo().Spots;
+		BotBuildPattern.Add(EYJJTower::Archer);
 	}
+}
 
-	FVector2f WizardPos()
-	{
-		return Geo().Wizard;
-	}
+// ---------------------------------------------------------------------------------------------
+// YJJData
 
-	FVector2f GatePos()
+const FYJJTuning& YJJData::Tune()
+{
+	return FYJJGameDatabase::Get().Tuning;
+}
+
+const FYJJUILayout& YJJData::Layout()
+{
+	return FYJJGameDatabase::Get().Layout;
+}
+
+const FYJJRuneDef& YJJData::Rune(EYJJRune Rune)
+{
+	const TArray<FYJJRuneDef>& Runes = FYJJGameDatabase::Get().Runes;
+	return Runes[FMath::Clamp<int32>(static_cast<int32>(Rune), 0, Runes.Num() - 1)];
+}
+
+const FYJJTowerDef& YJJData::Tower(EYJJTower Tower)
+{
+	const TArray<FYJJTowerDef>& Towers = FYJJGameDatabase::Get().Towers;
+	return Towers[FMath::Clamp<int32>(static_cast<int32>(Tower), 0, Towers.Num() - 1)];
+}
+
+const FYJJEnemyDef& YJJData::Enemy(EYJJEnemy Enemy)
+{
+	const TArray<FYJJEnemyDef>& Enemies = FYJJGameDatabase::Get().Enemies;
+	return Enemies[FMath::Clamp<int32>(static_cast<int32>(Enemy), 0, Enemies.Num() - 1)];
+}
+
+const FYJJReactionDef& YJJData::Reaction(EYJJReaction Reaction)
+{
+	const TArray<FYJJReactionDef>& Reactions = FYJJGameDatabase::Get().Reactions;
+	return Reactions[FMath::Clamp<int32>(static_cast<int32>(Reaction), 0, Reactions.Num() - 1)];
+}
+
+EYJJReaction YJJData::ReactionOf(EYJJElement A, EYJJElement B)
+{
+	if (A >= EYJJElement::Count || B >= EYJJElement::Count)
 	{
-		return Geo().Gate;
+		return EYJJReaction::None;
 	}
+	return FYJJGameDatabase::Get().PairReactions[static_cast<int32>(A)][static_cast<int32>(B)];
+}
+
+int32 YJJData::NumWaves()
+{
+	return YJJMap::Def(YJJMap::GetActive()).Waves.Num();
+}
+
+TConstArrayView<FYJJWaveGroup> YJJData::Wave(int32 Index)
+{
+	const TArray<TArray<FYJJWaveGroup>>& Waves = YJJMap::Def(YJJMap::GetActive()).Waves;
+	return Waves[FMath::Clamp(Index, 0, Waves.Num() - 1)];
+}
+
+TConstArrayView<FYJJUnlock> YJJData::UnlockTrack()
+{
+	return FYJJGameDatabase::Get().UnlockTrack;
+}
+
+uint32 YJJData::StartRuneMask()
+{
+	return FYJJGameDatabase::Get().StartRuneMask;
+}
+
+uint32 YJJData::StartTowerMask()
+{
+	return FYJJGameDatabase::Get().StartTowerMask;
+}
+
+EYJJRune YJJData::StartDisk(int32 Disk, int32 Socket)
+{
+	return FYJJGameDatabase::Get().StartDisks[FMath::Clamp(Disk, 0, YJJ::NumDisks - 1)][FMath::Clamp(Socket, 0, YJJ::NumSockets - 1)];
+}
+
+TConstArrayView<EYJJTower> YJJData::BotBuildPattern()
+{
+	return FYJJGameDatabase::Get().BotBuildPattern;
+}
+
+const FYJJSoundDef* YJJData::Sound(FName Key)
+{
+	return FYJJGameDatabase::Get().Sounds.Find(Key);
+}
+
+FString YJJData::EnemyTraits(EYJJEnemy Type)
+{
+	const FYJJEnemyDef& Def = Enemy(Type);
+	const FYJJTuning& Tuning = Tune();
+	TArray<FString> Traits;
+	if (Def.bBoss) { Traits.Add(YJJLoc::Get(TEXT("Trait.Boss"))); }
+	if (Def.bFlying) { Traits.Add(YJJLoc::Get(TEXT("Trait.Flying"))); }
+	if (Def.Speed >= Tuning.TraitFastSpeed) { Traits.Add(YJJLoc::Get(TEXT("Trait.Fast"))); }
+	if (Def.Armor >= Tuning.TraitArmor) { Traits.Add(YJJLoc::Get(TEXT("Trait.Armor"))); }
+	if (Def.MagicResist >= Tuning.TraitMagicResist) { Traits.Add(YJJLoc::Get(TEXT("Trait.MagicResist"))); }
+	if (Def.HealPerSecond > 0.f) { Traits.Add(YJJLoc::Get(TEXT("Trait.Heal"))); }
+	if (Def.HasSplit()) { Traits.Add(YJJLoc::Get(TEXT("Trait.Split"))); }
+	if (Def.Immune == EYJJElement::Ice) { Traits.Add(YJJLoc::Get(TEXT("Trait.ChillImmune"))); }
+	return FString::Join(Traits, *YJJLoc::Get(TEXT("Common.ListSeparator")));
+}
+
+const FString& YJJData::ElementName(EYJJElement Element)
+{
+	if (Element == EYJJElement::None || Element >= EYJJElement::Count)
+	{
+		return YJJLoc::Get(TEXT("Element.Arcane"));
+	}
+	return YJJLoc::Get(Rune(ElementRune(Element)).NameKey);
+}
+
+FLinearColor YJJData::ElementColor(EYJJElement Element)
+{
+	if (Element == EYJJElement::None || Element >= EYJJElement::Count)
+	{
+		return YJJUI::Arcane;
+	}
+	return Rune(ElementRune(Element)).Color;
+}
+
+// ---------------------------------------------------------------------------------------------
+// YJJMap
+
+int32 YJJMap::NumMaps()
+{
+	return FYJJGameDatabase::Get().Maps.Num();
+}
+
+void YJJMap::SetActive(int32 Map)
+{
+	FYJJGameDatabase& Database = FYJJGameDatabase::Get();
+	Database.ActiveMap = FMath::Clamp(Map, 0, Database.Maps.Num() - 1);
+}
+
+int32 YJJMap::GetActive()
+{
+	return FYJJGameDatabase::Get().ActiveMap;
+}
+
+const FYJJMapDef& YJJMap::Def(int32 Map)
+{
+	const TArray<FYJJMapDef>& Maps = FYJJGameDatabase::Get().Maps;
+	return Maps[FMath::Clamp(Map, 0, Maps.Num() - 1)];
+}
+
+const FString& YJJMap::Name(int32 Map)
+{
+	return YJJLoc::Get(Def(Map).NameKey);
+}
+
+const FString& YJJMap::Desc(int32 Map)
+{
+	return YJJLoc::Get(Def(Map).DescKey);
+}
+
+TConstArrayView<FVector2f> YJJMap::Path()
+{
+	return Def(GetActive()).Path;
+}
+
+float YJJMap::PathLength()
+{
+	return Def(GetActive()).PathCumulative.Last();
+}
+
+FVector2f YJJMap::PointAt(float Dist, float Lateral, FVector2f* OutDirection)
+{
+	const FYJJMapDef& Map = Def(GetActive());
+	const TArray<float>& Cumulative = Map.PathCumulative;
+	const int32 Num = Cumulative.Num();
+	Dist = FMath::Clamp(Dist, 0.f, Cumulative.Last());
+
+	// Cumulative[Index] <= Dist 인 마지막 구간
+	const int32 Index = FMath::Clamp(static_cast<int32>(Algo::UpperBound(Cumulative, Dist)) - 1, 0, Num - 2);
+	const FVector2f A = Map.Path[Index];
+	const FVector2f B = Map.Path[Index + 1];
+	const float SegmentLength = FMath::Max(Cumulative[Index + 1] - Cumulative[Index], KINDA_SMALL_NUMBER);
+	const FVector2f Direction = (B - A) / SegmentLength;
+	if (OutDirection)
+	{
+		*OutDirection = Direction;
+	}
+	const FVector2f Right(-Direction.Y, Direction.X);
+	return A + Direction * (Dist - Cumulative[Index]) + Right * Lateral;
+}
+
+float YJJMap::NearestDist(const FVector2f& Pos)
+{
+	const FYJJMapDef& Map = Def(GetActive());
+	float BestDist = 0.f;
+	float BestSq = TNumericLimits<float>::Max();
+	for (int32 Index = 0; Index + 1 < Map.Path.Num(); ++Index)
+	{
+		const FVector2f A = Map.Path[Index];
+		const FVector2f AB = Map.Path[Index + 1] - A;
+		const float LengthSq = FMath::Max(AB.SizeSquared(), KINDA_SMALL_NUMBER);
+		const float T = FMath::Clamp(FVector2f::DotProduct(Pos - A, AB) / LengthSq, 0.f, 1.f);
+		const float Sq = FVector2f::DistSquared(Pos, A + AB * T);
+		if (Sq < BestSq)
+		{
+			BestSq = Sq;
+			BestDist = Map.PathCumulative[Index] + FMath::Sqrt(LengthSq) * T;
+		}
+	}
+	return BestDist;
+}
+
+TConstArrayView<FVector2f> YJJMap::Spots()
+{
+	return Def(GetActive()).Spots;
+}
+
+FVector2f YJJMap::WizardPos()
+{
+	return Def(GetActive()).Wizard;
+}
+
+FVector2f YJJMap::GatePos()
+{
+	return Def(GetActive()).Gate;
 }
