@@ -102,7 +102,13 @@ void FYJJTextStore::PickLanguage()
 	FString Wanted;
 	if (!FParse::Value(FCommandLine::Get(), TEXT("yjjlang="), Wanted))
 	{
-		Wanted = FInternationalization::Get().GetCurrentCulture()->GetTwoLetterISOLanguageName();
+		// 엔진 컬처는 프로젝트에 UE 현지화 데이터가 없으면 en으로 떨어지므로 OS 표시 언어(ko-KR …)를 본다
+		Wanted = FPlatformMisc::GetDefaultLanguage();
+		int32 Separator = INDEX_NONE;
+		if (Wanted.FindChar(TEXT('-'), Separator) || Wanted.FindChar(TEXT('_'), Separator))
+		{
+			Wanted.LeftInline(Separator);
+		}
 	}
 	Wanted = Wanted.ToLower();
 	CurrentLanguage = Languages.Contains(Wanted) ? Wanted : FString(DefaultLanguage);

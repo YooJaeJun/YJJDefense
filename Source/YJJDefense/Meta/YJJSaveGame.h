@@ -12,12 +12,12 @@ class YJJDEFENSE_API UYJJSaveGame : public USaveGame
 	GENERATED_BODY()
 
 public:
-	// 비트 = EYJJRune / EYJJTower
+	// 비트 = EYJJRune / EYJJTower. 0이면 처음 시작 (Unlocks.csv 의 처음부터 가진 것으로 채운다)
 	UPROPERTY()
-	int32 UnlockedRunes = 0x4F;   // 처음부터: 불·얼음·물·번개·폭발
+	int32 UnlockedRunes = 0;
 
 	UPROPERTY()
-	int32 UnlockedTowers = 0x07;
+	int32 UnlockedTowers = 0;
 
 	// 이번 판에 들고 나갈 것
 	UPROPERTY()
@@ -26,7 +26,7 @@ public:
 	UPROPERTY()
 	int32 SelectedTowers = 0;
 
-	// 써 본 2룬 조합 (YJJSpellForge::MakeComboId)
+	// 써 본 2룬 조합 (FYJJSpellForge::MakeComboId)
 	UPROPERTY()
 	TArray<int32> DiscoveredCombos;
 
@@ -55,16 +55,9 @@ public:
 	UPROPERTY()
 	int32 Wins = 0;
 
-	// 마지막으로 쓴 디스크 구성 (EYJJRune, 빈 칸은 255)
+	// 마지막으로 쓴 디스크 구성 (EYJJRune 값)
 	UPROPERTY()
 	TArray<uint8> LastDisks;
-};
-
-struct FYJJUnlock
-{
-	bool bTower;
-	uint8 Index;         // EYJJRune 또는 EYJJTower
-	int32 PointsNeeded;  // 누적 수집 점수
 };
 
 struct FYJJRunStats
@@ -91,23 +84,32 @@ struct FYJJRunReward
 	int32 NewMap = INDEX_NONE;   // 이번에 열린 지도
 };
 
-namespace YJJProgression
+/** 수집·해금 규칙. 점수·가방 크기는 Tuning.csv, 해금 순서는 Unlocks.csv */
+class YJJDEFENSE_API FYJJProgression
 {
-	inline constexpr int32 MaxBagRunes = 5;
-	inline constexpr int32 MaxBagTowers = 4;
-	inline constexpr int32 MaxTier = 9;
+public:
+	/** 해금 항목 이름 (지금 언어) */
+	static const FString& UnlockName(const FYJJUnlock& Unlock);
 
-	YJJDEFENSE_API TConstArrayView<FYJJUnlock> UnlockTrack();
-	YJJDEFENSE_API const TCHAR* UnlockName(const FYJJUnlock& Unlock);
+	static UYJJSaveGame* LoadOrCreate();
+	static void Save(UYJJSaveGame* SaveGame);
 
-	YJJDEFENSE_API UYJJSaveGame* LoadOrCreate();
-	YJJDEFENSE_API void Save(UYJJSaveGame* SaveGame);
+	/** 선택이 비었거나 잠긴 것이 섞였으면 고친다 */
+	static void SanitizeSelection(UYJJSaveGame& SaveGame);
+	static bool ToggleRune(UYJJSaveGame& SaveGame, EYJJRune Rune);
+	static bool ToggleTower(UYJJSaveGame& SaveGame, EYJJTower Tower);
 
-	// 선택이 비었거나 잠긴 것이 섞였으면 고친다
-	YJJDEFENSE_API void SanitizeSelection(UYJJSaveGame& SaveGame);
-	YJJDEFENSE_API bool ToggleRune(UYJJSaveGame& SaveGame, EYJJRune Rune);
-	YJJDEFENSE_API bool ToggleTower(UYJJSaveGame& SaveGame, EYJJTower Tower);
+	/** 점수 계산 + 해금. SaveGame을 고치지만 디스크에 쓰지는 않는다 */
+	static FYJJRunReward ApplyRun(UYJJSaveGame& SaveGame, const FYJJRunStats& Stats);
 
-	// 점수 계산 + 해금. SaveGame을 고치지만 디스크에 쓰지는 않는다
-	YJJDEFENSE_API FYJJRunReward ApplyRun(UYJJSaveGame& SaveGame, const FYJJRunStats& Stats);
-}
+private:
+	/** 테스트·스모크 실행은 -YJJSave=이름 으로 다른 슬롯을 써서 실제 진행 상황을 건드리지 않는다 */
+	static FString SaveSlotName();
+	/** 아래쪽 비트부터 MaxCount개만 남긴다 */
+	static int32 KeepLowestBits(int32 Mask, int32 MaxCount);
+	static bool ToggleBit(int32& Selected, int32 Unlocked, int32 Bit, int32 MaxCount);
+
+	static constexpr const TCHAR* DefaultSlot = TEXT("YJJDefense");
+	static constexpr const TCHAR* SlotCommandLine = TEXT("YJJSave=");
+	static constexpr int32 MaskBits = 32;
+};

@@ -9,6 +9,8 @@ param(
     [double]$ShotInterval = 45,
     [int]$ResX = 1280,
     [int]$ResY = 720,
+    # 화면 글자 언어 (ko, en …). 비우면 OS 언어
+    [string]$Lang = "",
     [switch]$Fresh,
     [switch]$Sound
 )
@@ -27,6 +29,7 @@ $GameArgs = @(
     "-ExecCmds=`"yjj.AutoPlay 1, yjj.AutoPlaySpeed $Speed, yjj.AutoPlayExit $Runs, yjj.AutoPlayShotInterval $ShotInterval, yjj.AutoPlayMap $Map`"", "-log", "-abslog=`"$Log`""
 )
 if (-not $Sound) { $GameArgs += "-NoSound" }
+if ($Lang) { $GameArgs += "-yjjlang=$Lang" }
 
 $Process = Start-Process -FilePath $Editor -ArgumentList $GameArgs -PassThru
 if (-not $Process.WaitForExit((600 * $Runs + 300) * 1000)) {

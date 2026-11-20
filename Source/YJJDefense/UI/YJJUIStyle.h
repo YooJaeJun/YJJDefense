@@ -2,12 +2,15 @@
 
 #include "CoreMinimal.h"
 
-// UI 색·치수. 아트(Tools/Art/generate_art.py)와 같은 팔레트
+// UI 색. 아트(Tools/Art/generate_art.py)와 같은 팔레트. 배치·크기는 Content/YJJDefense/Data/UILayout.csv
 namespace YJJUI
 {
 	inline FLinearColor Hex(uint32 RGB, float Alpha = 1.f)
 	{
-		FLinearColor Color = FLinearColor::FromSRGBColor(FColor((RGB >> 16) & 0xFF, (RGB >> 8) & 0xFF, RGB & 0xFF));
+		constexpr uint32 ByteMask = 0xFF;
+		constexpr uint32 RedShift = 16;
+		constexpr uint32 GreenShift = 8;
+		FLinearColor Color = FLinearColor::FromSRGBColor(FColor((RGB >> RedShift) & ByteMask, (RGB >> GreenShift) & ByteMask, RGB & ByteMask));
 		Color.A = Alpha;
 		return Color;
 	}
@@ -18,6 +21,7 @@ namespace YJJUI
 		return Color;
 	}
 
+	// 기본 팔레트
 	inline const FLinearColor Ink = Hex(0x241E28);
 	inline const FLinearColor White = FLinearColor::White;
 	inline const FLinearColor Cream = Hex(0xFFF6DD);
@@ -31,19 +35,27 @@ namespace YJJUI
 	inline const FLinearColor Pink = Hex(0xFF9EC4);
 	inline const FLinearColor Gray = Hex(0xB8BFCA);
 	inline const FLinearColor DarkGray = Hex(0x6E6A7C);
+	/** 원소 없는 스펠 (선형 값) */
+	inline const FLinearColor Arcane(0.85f, 0.6f, 1.f);
 
-	// 스펠 바 배치
-	inline constexpr float BarX = 430.f;
-	inline constexpr float BarY = 912.f;
-	inline constexpr float BarW = 1060.f;
-	inline constexpr float BarH = 162.f;
-	inline constexpr float DiskY = 1006.f;
-	inline constexpr float DiskSize = 122.f;
-	inline constexpr float DiskFirstX = 900.f;
-	inline constexpr float DiskSpacing = 160.f;
-	inline constexpr float SocketSize = 46.f;
-	inline constexpr float BagX = 452.f;
-	inline constexpr float BagY = 972.f;
-	inline constexpr float BagIcon = 60.f;
-	inline constexpr float BagSpacing = 66.f;
+	// 쓰임새별
+	inline const FLinearColor ButtonDisabled = Hex(0xB9B5C4);
+	inline const FLinearColor BarBack = Hex(0x4A4456);
+	inline const FLinearColor Divider = Hex(0xE3DCC4);
+	inline const FLinearColor Gain = Hex(0x3E9B2B);
+	inline const FLinearColor CantAfford = Hex(0xFFB3AB);
+	inline const FLinearColor IconDisabled = Hex(0x9A96A8);
+	inline const FLinearColor CardPicked = Hex(0xFFE98A);
+	inline const FLinearColor CardLocked = Hex(0xCFCBDA);
+	inline const FLinearColor IconLocked = Hex(0x7C7888);
+	inline const FLinearColor DiskCooling = Hex(0xC9C6D4);
+	inline const FLinearColor SocketCooling = Hex(0xD8D5E0);
+	inline const FLinearColor SpotSelected = Hex(0xFFF3B0);
+	inline const FLinearColor SpotIdleGlow = Hex(0xE8F6D8);
+	inline const FLinearColor TowerHover = Hex(0xFFF7D0);
+	inline const FLinearColor FrozenTint = Hex(0xA8E4FF);
+	inline const FLinearColor PoisonTint = Hex(0xC9F29A);
+	inline const FLinearColor SlowTint = Hex(0xC4E6FF);
+	inline const FLinearColor HitTint = Hex(0xFF8A7A);
+	inline const FLinearColor BombPuff = Hex(0xFFE9C4);
 }

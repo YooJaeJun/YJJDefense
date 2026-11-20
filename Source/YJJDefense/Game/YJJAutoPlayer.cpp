@@ -1,17 +1,9 @@
 #include "Game/YJJAutoPlayer.h"
 #include "Game/YJJGameData.h"
 
-namespace
-{
-	// 길을 많이 덮는 자리 순서대로 이 병졸을 짓는다
-	const EYJJTower GBuildPattern[] = {
-		EYJJTower::Archer, EYJJTower::Barracks, EYJJTower::Archer, EYJJTower::Bombard, EYJJTower::Mage, EYJJTower::Barracks,
-		EYJJTower::Bombard, EYJJTower::Shrine, EYJJTower::Archer, EYJJTower::Mage, EYJJTower::Archer, EYJJTower::Archer,
-	};
-}
-
 void FYJJAutoPlayer::PlanBuildOrder()
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	PlannedMap = YJJMap::GetActive();
 	BuildOrder.Reset();
 
@@ -20,22 +12,23 @@ void FYJJAutoPlayer::PlanBuildOrder()
 	TArray<TPair<float, int32>> Scored;
 	for (int32 Spot = 0; Spot < Spots.Num(); ++Spot)
 	{
-		// 사거리 260 안에 들어오는 길 길이. 성문에 가까운 쪽에 조금 더 점수
+		// 사거리 안에 들어오는 길 길이. 성문에 가까운 쪽에 조금 더 점수
 		float Score = 0.f;
-		for (float Dist = 0.f; Dist < Length; Dist += 20.f)
+		for (float Dist = 0.f; Dist < Length; Dist += Tune.BotCoverageStep)
 		{
-			if (YJJ::RangeDist(YJJMap::PointAt(Dist), Spots[Spot]) <= 260.f)
+			if (YJJ::RangeDist(YJJMap::PointAt(Dist), Spots[Spot]) <= Tune.BotCoverageRange)
 			{
-				Score += 1.f + 0.4f * Dist / Length;
+				Score += 1.f + Tune.BotCoverageGateBias * Dist / Length;
 			}
 		}
 		Scored.Add({ Score, Spot });
 	}
 	Scored.Sort([](const TPair<float, int32>& A, const TPair<float, int32>& B) { return A.Key > B.Key; });
 
+	const TConstArrayView<EYJJTower> Pattern = YJJData::BotBuildPattern();
 	for (int32 Index = 0; Index < Scored.Num(); ++Index)
 	{
-		BuildOrder.Add({ Scored[Index].Value, GBuildPattern[Index % UE_ARRAY_COUNT(GBuildPattern)] });
+		BuildOrder.Add({ Scored[Index].Value, Pattern[Index % Pattern.Num()] });
 	}
 }
 
@@ -55,8 +48,9 @@ void FYJJAutoPlayer::Tick(FYJJDefenseSim& Sim)
 		return;
 	}
 
+	const FYJJTuning& Tune = YJJData::Tune();
 	ThinkTimer += FYJJDefenseSim::FixedStep;
-	if (ThinkTimer < 0.25f)
+	if (ThinkTimer < Tune.BotThinkInterval)
 	{
 		return;
 	}
@@ -65,7 +59,9 @@ void FYJJAutoPlayer::Tick(FYJJDefenseSim& Sim)
 	TickEconomy(Sim);
 
 	// 첫 웨이브는 조금 준비한 뒤, 이후는 조금 일찍 부른다
-	if (Sim.CanCallWave() && ((Sim.WaveIndex < 0 && Sim.Time > 2.f) || (Sim.WaveIndex >= 0 && Sim.NextWaveTimer < 10.f)))
+	const bool bFirstWaveReady = Sim.WaveIndex < 0 && Sim.Time > Tune.BotFirstWaveDelay;
+	const bool bNextWaveSoon = Sim.WaveIndex >= 0 && Sim.NextWaveTimer < Tune.BotCallWhenTimerBelow;
+	if (Sim.CanCallWave() && (bFirstWaveReady || bNextWaveSoon))
 	{
 		Sim.CallNextWave();
 	}
@@ -82,6 +78,7 @@ void FYJJAutoPlayer::Tick(FYJJDefenseSim& Sim)
 
 void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	if (PlannedMap != YJJMap::GetActive() || BuildOrder.IsEmpty())
 	{
 		PlanBuildOrder();
@@ -101,7 +98,7 @@ void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 		BuildType = BuildOrder[BuildIndex].Preferred;
 		if (!Sim.HasTower(BuildType))
 		{
-			// 못 들고 나왔으면 궁수, 그것도 없으면 아무거나
+			// 못 들고 나왔으면 궁수, 그것도 없으면 들고 나온 것 중 아무거나
 			BuildType = EYJJTower::Archer;
 			for (int32 Index = 0; Index < static_cast<int32>(EYJJTower::Count) && !Sim.HasTower(BuildType); ++Index)
 			{
@@ -124,8 +121,8 @@ void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 		}
 	}
 
-	// 처음 넷은 무조건 새로 짓고, 그 뒤로는 싼 것부터
-	const bool bPreferBuild = BuildIndex < 4 || BuildCost <= UpgradeCost;
+	// 처음 몇 개는 무조건 새로 짓고, 그 뒤로는 싼 것부터
+	const bool bPreferBuild = BuildIndex < Tune.BotForceBuildCount || BuildCost <= UpgradeCost;
 	if (bPreferBuild && BuildCost != MAX_int32)
 	{
 		if (Sim.Gold >= BuildCost)
@@ -140,7 +137,7 @@ void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 
 	// 여유가 있으면 마력 강화
 	const int32 WizardCost = Sim.WizardUpgradeCost();
-	if (bUseSpells && WizardCost > 0 && Sim.WaveIndex >= 2 && Sim.Gold >= WizardCost + 60)
+	if (bUseSpells && WizardCost > 0 && Sim.WaveIndex >= Tune.BotWizardMinWave && Sim.Gold >= WizardCost + Tune.BotWizardGoldReserve)
 	{
 		Sim.UpgradeWizard();
 	}
@@ -148,6 +145,7 @@ void FYJJAutoPlayer::TickEconomy(FYJJDefenseSim& Sim)
 
 void FYJJAutoPlayer::TickSpells(FYJJDefenseSim& Sim)
 {
+	const FYJJTuning& Tune = YJJData::Tune();
 	for (int32 Disk = 0; Disk < YJJ::NumDisks; ++Disk)
 	{
 		if (!Sim.CanCast(Disk))
@@ -156,21 +154,21 @@ void FYJJAutoPlayer::TickSpells(FYJJDefenseSim& Sim)
 		}
 
 		// 주변에 적이 가장 많이 몰린 적을 노린다 (같으면 더 앞선 적)
-		const float Radius = FMath::Max(Sim.Disks[Disk].Spell.Radius, 90.f);
+		const float Radius = FMath::Max(Sim.Disks[Disk].Spell.Radius, Tune.BotSpellMinRadius);
 		const FYJJEnemyState* Best = nullptr;
 		float BestScore = 0.f;
 		for (const FYJJEnemyState& Enemy : Sim.Enemies)
 		{
-			if (!Enemy.IsAlive() || Enemy.Dist < 120.f)
+			if (!Enemy.IsAlive() || Enemy.Dist < Tune.BotSpellMinDist)
 			{
 				continue;
 			}
-			float Score = Enemy.Dist * 0.0005f;
+			float Score = Enemy.Dist * Tune.BotFrontWeight;
 			for (const FYJJEnemyState& Other : Sim.Enemies)
 			{
 				if (Other.IsAlive() && YJJ::RangeDist(Other.Pos, Enemy.Pos) <= Radius)
 				{
-					Score += YJJData::Enemy(Other.Type).bBoss ? 4.f : 1.f;
+					Score += YJJData::Enemy(Other.Type).bBoss ? Tune.BotBossWeight : 1.f;
 				}
 			}
 			if (Score > BestScore)
@@ -184,7 +182,7 @@ void FYJJAutoPlayer::TickSpells(FYJJDefenseSim& Sim)
 		{
 			// 날아가는 동안 걸어올 만큼 앞을 겨냥
 			const bool bStanding = Best->BlockerId != INDEX_NONE || Best->IsDisabled();
-			const float Lead = bStanding ? 0.f : YJJData::Enemy(Best->Type).Speed * 0.45f;
+			const float Lead = bStanding ? 0.f : YJJData::Enemy(Best->Type).Speed * Tune.BotLeadTime;
 			Sim.CastSpell(Disk, YJJMap::PointAt(Best->Dist + Lead, Best->Lateral));
 			return;   // 한 번에 하나씩
 		}
@@ -193,15 +191,16 @@ void FYJJAutoPlayer::TickSpells(FYJJDefenseSim& Sim)
 
 void FYJJAutoPlayer::TickForge(FYJJDefenseSim& Sim)
 {
-	ForgeTimer += 0.25f;
-	if (ForgeTimer < 18.f || Sim.WaveIndex < 0)
+	const FYJJTuning& Tune = YJJData::Tune();
+	ForgeTimer += Tune.BotThinkInterval;
+	if (ForgeTimer < Tune.BotForgeInterval || Sim.WaveIndex < 0)
 	{
 		return;
 	}
 	ForgeTimer = 0.f;
 
 	// 들고 나온 룬으로 만들 수 있는 조합을 차례로 돌며, 아직 안 써 본 것을 마지막 디스크에 끼운다
-	TArray<EYJJRune, TInlineAllocator<9>> Bag;
+	TArray<EYJJRune> Bag;
 	for (int32 Index = 0; Index < static_cast<int32>(EYJJRune::Count); ++Index)
 	{
 		if (Sim.HasRune(static_cast<EYJJRune>(Index)))
@@ -209,7 +208,7 @@ void FYJJAutoPlayer::TickForge(FYJJDefenseSim& Sim)
 			Bag.Add(static_cast<EYJJRune>(Index));
 		}
 	}
-	if (Bag.Num() == 0)
+	if (Bag.IsEmpty())
 	{
 		return;
 	}
@@ -220,7 +219,7 @@ void FYJJAutoPlayer::TickForge(FYJJDefenseSim& Sim)
 		const int32 Cursor = (ForgeCursor + Try) % NumPairs;
 		const EYJJRune A = Bag[Cursor / Bag.Num()];
 		const EYJJRune B = Bag[Cursor % Bag.Num()];
-		if (A > B || Sim.CombosCast.Contains(YJJSpellForge::MakeComboId(A, B)))
+		if (A > B || Sim.CombosCast.Contains(FYJJSpellForge::MakeComboId(A, B)))
 		{
 			continue;
 		}

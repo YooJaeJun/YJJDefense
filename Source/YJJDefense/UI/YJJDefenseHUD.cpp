@@ -1,23 +1,32 @@
 #include "UI/YJJDefenseHUD.h"
 #include "CanvasItem.h"
+#include "Data/YJJLoc.h"
+#include "Data/YJJUILayout.h"
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
 #include "Engine/Texture2D.h"
 #include "Fonts/CompositeFont.h"
+#include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Game/YJJGameData.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/Paths.h"
+#include "Rendering/SlateRenderer.h"
 #include "UI/YJJUIStyle.h"
+#include "YJJDefense.h"
 #include "YJJDefenseGameMode.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogYJJHUD, Log, All);
+const FYJJUILayout& AYJJDefenseHUD::UI()
+{
+	return YJJData::Layout();
+}
 
 // ---------------------------------------------------------------------------------------------
 // 준비
 
 UTexture2D* AYJJDefenseHUD::LoadTex(const FString& Name)
 {
-	const FString Path = FString::Printf(TEXT("/Game/YJJDefense/Textures/%s.%s"), *Name, *Name);
+	const FString Path = FString::Printf(TEXT("%s/%s.%s"), TextureFolder, *Name, *Name);
 	UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *Path);
 	if (Texture)
 	{
@@ -30,49 +39,48 @@ void AYJJDefenseHUD::BeginPlay()
 {
 	Super::BeginPlay();
 
-	static const TCHAR* EnemyNames[] = { TEXT("Imp"), TEXT("Chicken"), TEXT("Potato"), TEXT("Toast"), TEXT("Mushroom"), TEXT("PuddingKing"),
-		TEXT("Crab"), TEXT("Jellyfish"), TEXT("Coconut"), TEXT("CocoKid"), TEXT("KingCrab"), TEXT("Snowman"), TEXT("Snowball"), TEXT("Penguin"), TEXT("Yeti") };
-	static_assert(UE_ARRAY_COUNT(EnemyNames) == static_cast<int32>(EYJJEnemy::Count));
-	static const TCHAR* TowerNames[] = { TEXT("Archer"), TEXT("Barracks"), TEXT("Bombard"), TEXT("Mage"), TEXT("Shrine") };
-	static const TCHAR* RuneNames[] = { TEXT("Fire"), TEXT("Ice"), TEXT("Water"), TEXT("Lightning"), TEXT("Poison"), TEXT("Wind"), TEXT("Explosion"), TEXT("Chain"), TEXT("Split") };
-	static const TCHAR* BallNames[] = { TEXT("Arcane"), TEXT("Fire"), TEXT("Ice"), TEXT("Water"), TEXT("Lightning"), TEXT("Poison"), TEXT("Wind") };
+	BaseFont = LoadObject<UFont>(nullptr, BaseFontPath);
 
-	for (int32 Map = 0; Map < FMath::Min(YJJMap::NumMaps(), static_cast<int32>(UE_ARRAY_COUNT(MapTextures))); ++Map)
+	// 그림 이름은 데이터 표의 Art·Texture 열
+	for (int32 Map = 0; Map < YJJMap::NumMaps(); ++Map)
 	{
-		MapTextures[Map] = LoadTex(YJJMap::Texture(Map));
-		MapThumbs[Map] = LoadTex(FString(YJJMap::Texture(Map)) + TEXT("_Thumb"));
+		const FString& Texture = YJJMap::Def(Map).Texture;
+		MapTextures.Add(LoadTex(Texture));
+		MapThumbs.Add(LoadTex(Texture + ThumbSuffix));
 	}
-	for (int32 Type = 0; Type < UE_ARRAY_COUNT(EnemyNames); ++Type)
+	for (int32 Type = 0; Type < static_cast<int32>(EYJJEnemy::Count); ++Type)
 	{
-		for (int32 Frame = 0; Frame < 2; ++Frame)
+		for (int32 Frame = 0; Frame < EnemyFrames; ++Frame)
 		{
-			EnemyTextures[Type][Frame] = LoadTex(FString::Printf(TEXT("T_Enemy_%s_%d"), EnemyNames[Type], Frame));
+			EnemyTextures[Type][Frame] = LoadTex(FString::Printf(TEXT("T_Enemy_%s_%d"), *YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Art, Frame));
 		}
 	}
-	for (int32 Type = 0; Type < UE_ARRAY_COUNT(TowerNames); ++Type)
+	for (int32 Type = 0; Type < static_cast<int32>(EYJJTower::Count); ++Type)
 	{
-		for (int32 Level = 0; Level <= YJJ::MaxTowerLevel; ++Level)
+		for (int32 Level = 0; Level < YJJ::NumTowerLevels; ++Level)
 		{
-			TowerTextures[Type][Level] = LoadTex(FString::Printf(TEXT("T_Tower_%s_%d"), TowerNames[Type], Level));
+			TowerTextures[Type][Level] = LoadTex(FString::Printf(TEXT("T_Tower_%s_%d"), *YJJData::Tower(static_cast<EYJJTower>(Type)).Art, Level));
 		}
 	}
-	for (int32 Frame = 0; Frame < 3; ++Frame)
+	for (int32 Frame = 0; Frame < SoldierFrames; ++Frame)
 	{
 		SoldierTextures[Frame] = LoadTex(FString::Printf(TEXT("T_Soldier_%d"), Frame));
 	}
-	for (int32 Frame = 0; Frame < 2; ++Frame)
+	for (int32 Frame = 0; Frame < WizardFrames; ++Frame)
 	{
 		WizardTextures[Frame] = LoadTex(FString::Printf(TEXT("T_Wizard_%d"), Frame));
 	}
-	for (int32 Index = 0; Index < UE_ARRAY_COUNT(RuneNames); ++Index)
+	for (int32 Index = 0; Index < static_cast<int32>(EYJJRune::Count); ++Index)
 	{
-		RuneTextures[Index] = LoadTex(FString::Printf(TEXT("T_Rune_%s"), RuneNames[Index]));
+		RuneTextures[Index] = LoadTex(FString::Printf(TEXT("T_Rune_%s"), *YJJData::Rune(static_cast<EYJJRune>(Index)).Art));
 	}
-	for (int32 Index = 0; Index < UE_ARRAY_COUNT(BallNames); ++Index)
+	for (int32 Index = 0; Index < static_cast<int32>(EYJJElement::Count); ++Index)
 	{
-		BallTextures[Index] = LoadTex(FString::Printf(TEXT("T_Ball_%s"), BallNames[Index]));
+		const EYJJElement Element = static_cast<EYJJElement>(Index);
+		const FString Art = Element == EYJJElement::None ? FString(ArcaneBallArt) : YJJData::Rune(YJJData::ElementRune(Element)).Art;
+		BallTextures[Index] = LoadTex(FString::Printf(TEXT("T_Ball_%s"), *Art));
 	}
-	for (int32 Frame = 0; Frame < 4; ++Frame)
+	for (int32 Frame = 0; Frame < PuffFrames; ++Frame)
 	{
 		PuffTextures[Frame] = LoadTex(FString::Printf(TEXT("T_FX_Puff%d"), Frame));
 	}
@@ -109,7 +117,7 @@ void AYJJDefenseHUD::BeginPlay()
 	CheckIcon = LoadTex(TEXT("T_UI_Check"));
 	SkullIcon = LoadTex(TEXT("T_UI_Skull"));
 
-	FxRandom.Initialize(7);
+	FxRandom.Initialize(FxRandomSeed);
 }
 
 void AYJJDefenseHUD::OnRunStarted()
@@ -134,8 +142,8 @@ void AYJJDefenseHUD::DrawHUD()
 		return;
 	}
 
-	ViewScale = FMath::Max(FMath::Min(Canvas->ClipX / YJJ::ViewW, Canvas->ClipY / YJJ::ViewH), 0.1f);
-	ViewOffset = FVector2f((Canvas->ClipX - YJJ::ViewW * ViewScale) * 0.5f, (Canvas->ClipY - YJJ::ViewH * ViewScale) * 0.5f);
+	ViewScale = FMath::Max(FMath::Min(Canvas->ClipX / YJJ::ViewW, Canvas->ClipY / YJJ::ViewH), UI().MinViewScale);
+	ViewOffset = FVector2f(Canvas->ClipX - YJJ::ViewW * ViewScale, Canvas->ClipY - YJJ::ViewH * ViewScale) * 0.5f;
 
 	UpdateMouse();
 
@@ -162,14 +170,14 @@ void AYJJDefenseHUD::DrawHUD()
 
 	// 화면비가 16:9가 아니면 남는 자리를 가린다
 	const FLinearColor Bar = YJJUI::Ink;
-	if (ViewOffset.X > 0.5f)
+	if (ViewOffset.X > 0.f)
 	{
 		FCanvasTileItem Left(FVector2D(0.0, 0.0), FVector2D(ViewOffset.X, Canvas->ClipY), Bar);
 		Canvas->DrawItem(Left);
 		FCanvasTileItem Right(FVector2D(Canvas->ClipX - ViewOffset.X, 0.0), FVector2D(ViewOffset.X, Canvas->ClipY), Bar);
 		Canvas->DrawItem(Right);
 	}
-	if (ViewOffset.Y > 0.5f)
+	if (ViewOffset.Y > 0.f)
 	{
 		FCanvasTileItem Top(FVector2D(0.0, 0.0), FVector2D(Canvas->ClipX, ViewOffset.Y), Bar);
 		Canvas->DrawItem(Top);
@@ -180,6 +188,21 @@ void AYJJDefenseHUD::DrawHUD()
 
 // ---------------------------------------------------------------------------------------------
 // 기본 그리기
+
+FString AYJJDefenseHUD::Whole(float Value)
+{
+	return FString::FromInt(FMath::RoundToInt(Value));
+}
+
+FString AYJJDefenseHUD::OneDecimal(float Value)
+{
+	return FString::Printf(TEXT("%.1f"), Value);
+}
+
+int32 AYJJDefenseHUD::Percent(float Ratio)
+{
+	return FMath::RoundToInt(Ratio * PercentScale);
+}
 
 FVector2f AYJJDefenseHUD::TexSize(const UTexture2D* Texture) const
 {
@@ -207,7 +230,7 @@ void AYJJDefenseHUD::DrawSprite(UTexture2D* Texture, const FVector2f& Center, co
 
 void AYJJDefenseHUD::DrawSpriteFeet(UTexture2D* Texture, const FVector2f& Feet, const FVector2f& Scale, const FLinearColor& Color, bool bFlipX, float Rotation)
 {
-	const FVector2f Size = TexSize(Texture) * 0.5f * Scale;
+	const FVector2f Size = TexSize(Texture) * UI().SpriteScale * Scale;
 	DrawSprite(Texture, FVector2f(Feet.X, Feet.Y - Size.Y * 0.5f), Size, Color, Rotation, bFlipX);
 }
 
@@ -227,19 +250,20 @@ void AYJJDefenseHUD::DrawPanel(float X, float Y, float W, float H, const FLinear
 		return;
 	}
 
-	// 64px 텍스처의 모서리 20px은 그대로, 가운데만 늘린다
-	const float SourceCorner = 20.f / 64.f;
-	const float Corner = FMath::Min(16.f, FMath::Min(W, H) * 0.5f);
-	const float Xs[3] = { X, X + Corner, X + W - Corner };
-	const float Ws[3] = { Corner, W - Corner * 2.f, Corner };
-	const float Ys[3] = { Y, Y + Corner, Y + H - Corner };
-	const float Hs[3] = { Corner, H - Corner * 2.f, Corner };
-	const float Us[3] = { 0.f, SourceCorner, 1.f - SourceCorner };
-	const float UWs[3] = { SourceCorner, 1.f - SourceCorner * 2.f, SourceCorner };
+	// 9칸으로 나눠 모서리는 그대로, 가운데만 늘린다
+	constexpr int32 Cells = 3;
+	const float SourceCorner = UI().PanelSourceCorner / TexSize(Texture).X;
+	const float Corner = FMath::Min(UI().PanelCorner, FMath::Min(W, H) * 0.5f);
+	const float Xs[Cells] = { X, X + Corner, X + W - Corner };
+	const float Ws[Cells] = { Corner, W - Corner * 2.f, Corner };
+	const float Ys[Cells] = { Y, Y + Corner, Y + H - Corner };
+	const float Hs[Cells] = { Corner, H - Corner * 2.f, Corner };
+	const float Us[Cells] = { 0.f, SourceCorner, 1.f - SourceCorner };
+	const float UWs[Cells] = { SourceCorner, 1.f - SourceCorner * 2.f, SourceCorner };
 
-	for (int32 Row = 0; Row < 3; ++Row)
+	for (int32 Row = 0; Row < Cells; ++Row)
 	{
-		for (int32 Column = 0; Column < 3; ++Column)
+		for (int32 Column = 0; Column < Cells; ++Column)
 		{
 			if (Ws[Column] <= 0.f || Hs[Row] <= 0.f)
 			{
@@ -282,7 +306,7 @@ TSharedPtr<const FCompositeFont> AYJJDefenseHUD::GetGameFont(const UFont* Fallba
 	}
 
 	TSharedRef<FCompositeFont> Composite = MakeShared<FCompositeFont>();
-	Composite->DefaultTypeface.Fonts.Add(FTypefaceEntry(TEXT("Regular"), FontPath, EFontHinting::Default, EFontLoadingPolicy::LazyLoad));
+	Composite->DefaultTypeface.Fonts.Add(FTypefaceEntry(GameFontFace, FontPath, EFontHinting::Default, EFontLoadingPolicy::LazyLoad));
 	if (const FCompositeFont* Fallback = FallbackFont ? FallbackFont->GetCompositeFont() : nullptr)
 	{
 		Composite->FallbackTypeface.Typeface = Fallback->DefaultTypeface;
@@ -291,22 +315,32 @@ TSharedPtr<const FCompositeFont> AYJJDefenseHUD::GetGameFont(const UFont* Fallba
 	return GameFont;
 }
 
-void AYJJDefenseHUD::DrawLabel(const FString& Text, float X, float Y, float Size, const FLinearColor& Color, EAlign Align, float Outline)
+void AYJJDefenseHUD::DrawLabel(const FString& Text, float X, float Y, float Size, const FLinearColor& Color, EAlign Align, float Outline, float MaxWidth)
 {
 	// FCanvasTextItem은 UFont가 있어야 그려진다. 실제 글꼴은 주아체 컴포지트
-	static const UFont* BaseFont = LoadObject<UFont>(nullptr, TEXT("/Engine/EngineFonts/Roboto.Roboto"));
 	if (!BaseFont || Text.IsEmpty() || Color.A <= 0.f)
 	{
 		return;
 	}
 
-	const int32 FontSize = FMath::Max(FMath::RoundToInt(Size * ViewScale * 0.75f), 6);
+	const int32 FontSize = FMath::Max(FMath::RoundToInt(Size * ViewScale * UI().FontPointScale), FMath::RoundToInt(UI().MinFontSize));
 	const TSharedPtr<const FCompositeFont> Composite = GetGameFont(BaseFont);
-	FSlateFontInfo Font = Composite.IsValid() ? FSlateFontInfo(Composite, FontSize) : FSlateFontInfo(BaseFont, FontSize, TEXT("Bold"));
+	FSlateFontInfo Font = Composite.IsValid() ? FSlateFontInfo(Composite, FontSize) : FSlateFontInfo(BaseFont, FontSize, BaseFontStyle);
 	if (Outline > 0.f)
 	{
 		Font.OutlineSettings.OutlineSize = FMath::Max(FMath::RoundToInt(Outline * ViewScale), 1);
 		Font.OutlineSettings.OutlineColor = YJJUI::WithAlpha(YJJUI::Ink, Color.A);
+	}
+
+	// 칸보다 길면 (주로 다른 언어) 글자를 줄여서 맞춘다
+	FSlateRenderer* Renderer = MaxWidth > 0.f && FSlateApplication::IsInitialized() ? FSlateApplication::Get().GetRenderer() : nullptr;
+	if (Renderer)
+	{
+		const float Width = Renderer->GetFontMeasureService()->Measure(Text, Font).X / ViewScale;
+		if (Width > MaxWidth)
+		{
+			Font.Size = FMath::Max(FMath::FloorToFloat(Font.Size * MaxWidth / Width), UI().MinFontSize);
+		}
 	}
 
 	FCanvasTextItem Item(FVector2D(ViewOffset.X + X * ViewScale, ViewOffset.Y + Y * ViewScale), FText::FromString(Text), Font, Color);
@@ -335,17 +369,18 @@ void AYJJDefenseHUD::DrawEllipseRange(const FVector2f& Center, float Radius, con
 		return;
 	}
 	const FVector2f Size(Radius * 2.f, Radius * 2.f / YJJ::YStretch);
-	DrawSprite(DiscTexture, Center, Size * 1.12f, YJJUI::WithAlpha(Color, Color.A * 0.18f));
+	DrawSprite(DiscTexture, Center, Size * UI().RangeFillScale, YJJUI::WithAlpha(Color, Color.A * UI().RangeFillAlpha));
 	DrawSprite(DashRingTexture, Center, Size, Color);
 }
 
 void AYJJDefenseHUD::DrawBar(const FVector2f& Center, float Width, float Fraction, const FLinearColor& Color)
 {
-	const float Height = 7.f;
+	const float Height = UI().HealthBarHeight;
+	const float Border = UI().HealthBarBorder;
 	const float X = Center.X - Width * 0.5f;
 	const float Y = Center.Y - Height * 0.5f;
-	DrawBox(X - 2.f, Y - 2.f, Width + 4.f, Height + 4.f, YJJUI::Ink);
-	DrawBox(X, Y, Width, Height, YJJUI::Hex(0x4A4456));
+	DrawBox(X - Border, Y - Border, Width + Border * 2.f, Height + Border * 2.f, YJJUI::Ink);
+	DrawBox(X, Y, Width, Height, YJJUI::BarBack);
 	DrawBox(X, Y, Width * FMath::Clamp(Fraction, 0.f, 1.f), Height, Color);
 }
 
@@ -375,12 +410,12 @@ const AYJJDefenseHUD::FHitRegion* AYJJDefenseHUD::HitAt(const FVector2f& Point) 
 bool AYJJDefenseHUD::DrawButton(float X, float Y, float W, float H, const FLinearColor& Color, EAction Action, int32 A, int32 B, bool bEnabled)
 {
 	const bool bHover = IsHover(X, Y, W, H);
-	FLinearColor Tint = bEnabled ? Color : YJJUI::Hex(0xB9B5C4);
+	FLinearColor Tint = bEnabled ? Color : YJJUI::ButtonDisabled;
 	if (bHover && bEnabled)
 	{
 		// 살짝 밝게 + 위로 들썩
-		Tint = FMath::Lerp(Tint, FLinearColor::White, 0.25f);
-		Y -= 2.f;
+		Tint = FMath::Lerp(Tint, FLinearColor::White, UI().ButtonHoverBrighten);
+		Y -= UI().ButtonHoverLift;
 	}
 	DrawPanel(X, Y, W, H, Tint);
 	AddHit(X, Y, W, H, Action, A, B);
@@ -398,8 +433,8 @@ AYJJDefenseHUD::FFx& AYJJDefenseHUD::AddFx(EFx Kind, const FVector2f& Pos, float
 	Fx.Life = Life;
 	Fx.Size = Size;
 	Fx.Color = Color;
-	Fx.Seed = FxRandom.RandRange(0, 9999);
-	Fx.Rotation = FxRandom.FRandRange(0.f, 360.f);
+	Fx.Seed = FxRandom.RandRange(0, FxSeedRange);
+	Fx.Rotation = FxRandom.FRandRange(0.f, FullTurnDegrees);
 	return Fx;
 }
 
@@ -407,7 +442,7 @@ void AYJJDefenseHUD::AddText(const FVector2f& Pos, const FString& Text, float Si
 {
 	FFx& Fx = AddFx(EFx::Text, Pos, Life, Size, Color);
 	Fx.Text = Text;
-	Fx.Vel = FVector2f(0.f, -46.f);
+	Fx.Vel = FVector2f(0.f, -UI().FxTextRiseSpeed);
 }
 
 void AYJJDefenseHUD::AddSparks(const FVector2f& Pos, int32 Count, const FLinearColor& Color, float Speed)
@@ -415,8 +450,10 @@ void AYJJDefenseHUD::AddSparks(const FVector2f& Pos, int32 Count, const FLinearC
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const float Angle = FxRandom.FRandRange(0.f, UE_TWO_PI);
-		FFx& Fx = AddFx(EFx::Spark, Pos, FxRandom.FRandRange(0.35f, 0.65f), FxRandom.FRandRange(10.f, 20.f), Color);
-		Fx.Vel = FVector2f(FMath::Cos(Angle), FMath::Sin(Angle) * 0.7f - 0.5f) * Speed * FxRandom.FRandRange(0.5f, 1.2f);
+		FFx& Fx = AddFx(EFx::Spark, Pos, FxRandom.FRandRange(UI().FxSparkLifeMin, UI().FxSparkLifeMax),
+			FxRandom.FRandRange(UI().FxSparkSizeMin, UI().FxSparkSizeMax), Color);
+		Fx.Vel = FVector2f(FMath::Cos(Angle), FMath::Sin(Angle) * UI().FxSparkFlatten - UI().FxSparkUpward)
+			* Speed * FxRandom.FRandRange(UI().FxSparkSpeedMin, UI().FxSparkSpeedMax);
 	}
 }
 
@@ -431,227 +468,254 @@ void AYJJDefenseHUD::TickAndDrawFx(float DeltaSeconds)
 			Effects.RemoveAtSwap(Index, EAllowShrinking::No);
 			continue;
 		}
+		DrawFx(Fx, DeltaSeconds);
+	}
+}
 
-		const float T = Fx.Age / Fx.Life;
-		switch (Fx.Kind)
+void AYJJDefenseHUD::DrawFx(FFx& Fx, float DeltaSeconds)
+{
+	const float T = Fx.Age / Fx.Life;
+	switch (Fx.Kind)
+	{
+	case EFx::Puff:
+	{
+		const int32 Frame = FMath::Clamp(FMath::FloorToInt(T * PuffFrames), 0, PuffFrames - 1);
+		const float FadeStart = UI().FxPuffFadeStart;
+		const float Alpha = T > FadeStart ? (1.f - T) / (1.f - FadeStart) : 1.f;
+		DrawSprite(PuffTextures[Frame], Fx.Pos, FVector2f(Fx.Size, Fx.Size), YJJUI::WithAlpha(Fx.Color, Alpha));
+		break;
+	}
+	case EFx::Burst:
+	{
+		// 확 커졌다가 사라진다
+		const float Scale = FMath::Lerp(UI().FxBurstScaleStart, UI().FxBurstScaleEnd, FMath::Sqrt(T));
+		const float FadeStart = UI().FxBurstFadeStart;
+		const float Alpha = T < FadeStart ? 1.f : (1.f - T) / (1.f - FadeStart);
+		DrawSprite(BurstTexture, Fx.Pos, FVector2f(Fx.Size, Fx.Size) * Scale, YJJUI::WithAlpha(Fx.Color, Alpha), Fx.Rotation);
+		break;
+	}
+	case EFx::Ring:
+	{
+		const float Radius = FMath::Lerp(Fx.Size, Fx.Size2, 1.f - FMath::Square(1.f - T));
+		DrawSprite(RingTexture, Fx.Pos, FVector2f(Radius * 2.f, Radius * 2.f / YJJ::YStretch), YJJUI::WithAlpha(Fx.Color, 1.f - T));
+		break;
+	}
+	case EFx::Text:
+	{
+		Fx.Pos += Fx.Vel * DeltaSeconds;
+		const float Punch = 1.f + UI().FxTextPunch * FMath::Max(1.f - Fx.Age * UI().FxTextPunchSpeed, 0.f);
+		const float FadeStart = UI().FxTextFadeStart;
+		const float Alpha = 1.f - FMath::Clamp((T - FadeStart) / (1.f - FadeStart), 0.f, 1.f);
+		DrawLabel(Fx.Text, Fx.Pos.X, Fx.Pos.Y, Fx.Size * Punch, YJJUI::WithAlpha(Fx.Color, Alpha), EAlign::Center, UI().FxTextOutline);
+		break;
+	}
+	case EFx::Bolt:
+	{
+		// 지그재그 번개 (잠깐씩 모양이 바뀐다)
+		FRandomStream Random(Fx.Seed + FMath::FloorToInt(Fx.Age * UI().FxBoltFlickerRate));
+		const FVector2f Delta = Fx.Pos2 - Fx.Pos;
+		const float Length = Delta.Size();
+		const FVector2f Normal = Length > KINDA_SMALL_NUMBER ? FVector2f(-Delta.Y, Delta.X) / Length : FVector2f::ZeroVector;
+		const int32 Segments = FMath::Clamp(FMath::RoundToInt(Length / UI().FxBoltSegment), FMath::RoundToInt(UI().FxBoltMinSegments), FMath::RoundToInt(UI().FxBoltMaxSegments));
+		const float Jitter = UI().FxBoltJitter;
+		FVector2f Previous = Fx.Pos;
+		for (int32 Segment = 1; Segment <= Segments; ++Segment)
 		{
-		case EFx::Puff:
-		{
-			const int32 Frame = FMath::Clamp(FMath::FloorToInt(T * 4.f), 0, 3);
-			DrawSprite(PuffTextures[Frame], Fx.Pos, FVector2f(Fx.Size, Fx.Size), YJJUI::WithAlpha(Fx.Color, T > 0.75f ? (1.f - T) * 4.f : 1.f));
-			break;
-		}
-		case EFx::Burst:
-		{
-			// 확 커졌다가 사라진다
-			const float Scale = FMath::Lerp(0.55f, 1.15f, FMath::Sqrt(T));
-			DrawSprite(BurstTexture, Fx.Pos, FVector2f(Fx.Size, Fx.Size) * Scale, YJJUI::WithAlpha(Fx.Color, T < 0.6f ? 1.f : (1.f - T) / 0.4f), Fx.Rotation);
-			break;
-		}
-		case EFx::Ring:
-		{
-			const float Radius = FMath::Lerp(Fx.Size, Fx.Size2, 1.f - FMath::Square(1.f - T));
-			DrawSprite(RingTexture, Fx.Pos, FVector2f(Radius * 2.f, Radius * 2.f / YJJ::YStretch), YJJUI::WithAlpha(Fx.Color, 1.f - T));
-			break;
-		}
-		case EFx::Text:
-		{
-			Fx.Pos += Fx.Vel * DeltaSeconds;
-			const float Punch = 1.f + 0.5f * FMath::Max(1.f - Fx.Age * 7.f, 0.f);
-			const float Alpha = 1.f - FMath::Clamp((T - 0.65f) / 0.35f, 0.f, 1.f);
-			DrawLabel(Fx.Text, Fx.Pos.X, Fx.Pos.Y, Fx.Size * Punch, YJJUI::WithAlpha(Fx.Color, Alpha), EAlign::Center, 4.f);
-			break;
-		}
-		case EFx::Bolt:
-		{
-			// 지그재그 번개 (잠깐씩 모양이 바뀐다)
-			FRandomStream Random(Fx.Seed + FMath::FloorToInt(Fx.Age * 30.f));
-			const FVector2f Delta = Fx.Pos2 - Fx.Pos;
-			const float Length = Delta.Size();
-			const FVector2f Normal = Length > 1.f ? FVector2f(-Delta.Y, Delta.X) / Length : FVector2f::ZeroVector;
-			const int32 Segments = FMath::Clamp(FMath::RoundToInt(Length / 36.f), 2, 14);
-			FVector2f Previous = Fx.Pos;
-			for (int32 Segment = 1; Segment <= Segments; ++Segment)
+			FVector2f Point = Fx.Pos + Delta * (static_cast<float>(Segment) / Segments);
+			if (Segment < Segments)
 			{
-				FVector2f Point = Fx.Pos + Delta * (static_cast<float>(Segment) / Segments);
-				if (Segment < Segments)
-				{
-					Point += Normal * Random.FRandRange(-16.f, 16.f);
-				}
-				DrawStroke(Previous, Point, YJJUI::WithAlpha(YJJUI::Ink, 1.f - T), Fx.Size + 5.f);
-				DrawStroke(Previous, Point, YJJUI::WithAlpha(Fx.Color, 1.f - T), Fx.Size);
-				Previous = Point;
+				Point += Normal * Random.FRandRange(-Jitter, Jitter);
 			}
-			break;
+			DrawStroke(Previous, Point, YJJUI::WithAlpha(YJJUI::Ink, 1.f - T), Fx.Size + UI().FxBoltOutline);
+			DrawStroke(Previous, Point, YJJUI::WithAlpha(Fx.Color, 1.f - T), Fx.Size);
+			Previous = Point;
 		}
-		case EFx::Spark:
-		{
-			Fx.Vel.Y += 260.f * DeltaSeconds;
-			Fx.Pos += Fx.Vel * DeltaSeconds;
-			Fx.Rotation += 240.f * DeltaSeconds;
-			DrawSprite(StarFxTexture, Fx.Pos, FVector2f(Fx.Size, Fx.Size) * (1.f - T * 0.6f), YJJUI::WithAlpha(Fx.Color, 1.f - T * T), Fx.Rotation);
-			break;
-		}
-		}
+		break;
+	}
+	case EFx::Spark:
+	{
+		Fx.Vel.Y += UI().FxSparkGravity * DeltaSeconds;
+		Fx.Pos += Fx.Vel * DeltaSeconds;
+		Fx.Rotation += UI().FxSparkSpin * DeltaSeconds;
+		DrawSprite(StarFxTexture, Fx.Pos, FVector2f(Fx.Size, Fx.Size) * (1.f - T * UI().FxSparkShrink), YJJUI::WithAlpha(Fx.Color, 1.f - T * T), Fx.Rotation);
+		break;
+	}
+	}
+}
+
+void AYJJDefenseHUD::OnProjectileHit(const FYJJSimEvent& Event)
+{
+	const FVector2f Up(0.f, -UI().FxGroundLift);
+	switch (static_cast<EYJJProjectile>(Event.Int))
+	{
+	case EYJJProjectile::Arrow:
+		AddFx(EFx::Burst, Event.Pos + Up, UI().FxArrowHitLife, UI().FxArrowHitSize, FLinearColor::White);
+		break;
+	case EYJJProjectile::MagicBolt:
+		AddFx(EFx::Burst, Event.Pos + Up, UI().FxBoltHitLife, UI().FxBoltHitSize, YJJUI::Purple);
+		break;
+	case EYJJProjectile::Bomb:
+	{
+		const FVector2f Center = Event.Pos - FVector2f(0.f, UI().FxBombLift);
+		AddFx(EFx::Puff, Center, UI().FxBombPuffLife, Event.Value * UI().FxBombPuffScale, YJJUI::BombPuff);
+		AddFx(EFx::Burst, Center, UI().FxBombBurstLife, Event.Value * UI().FxBombBurstScale, YJJUI::Orange);
+		FFx& Ring = AddFx(EFx::Ring, Event.Pos, UI().FxBombRingLife, Event.Value * UI().FxBombRingStart, YJJUI::Orange);
+		Ring.Size2 = Event.Value;
+		break;
+	}
+	case EYJJProjectile::ShrineOrb:
+	{
+		FFx& Ring = AddFx(EFx::Ring, Event.Pos, UI().FxOrbRingLife, UI().FxOrbRingStart, YJJData::ElementColor(Event.Element));
+		Ring.Size2 = Event.Value;
+		break;
+	}
+	default:
+		break;
 	}
 }
 
 void AYJJDefenseHUD::OnSimEvents(TConstArrayView<FYJJSimEvent> Events)
 {
-	const FVector2f Up(0.f, -24.f);
+	const FVector2f Up(0.f, -UI().FxGroundLift);
 
 	for (const FYJJSimEvent& Event : Events)
 	{
 		switch (Event.Type)
 		{
 		case EYJJSimEvent::EnemyKilled:
-			AddFx(EFx::Puff, Event.Pos + Up, 0.36f, 84.f, FLinearColor::White);
-			AddText(Event.Pos + FVector2f(0.f, -52.f), FString::Printf(TEXT("+%d"), Event.Int), 24.f, YJJUI::Yellow, 0.8f);
+			AddFx(EFx::Puff, Event.Pos + Up, UI().FxKillPuffLife, UI().FxKillPuffSize, FLinearColor::White);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxKillTextLift), YJJLoc::Format(TEXT("Fx.Gold"), { Event.Int }), UI().FxKillTextSize, YJJUI::Yellow, UI().FxKillTextLife);
 			break;
 
 		case EYJJSimEvent::EnemySplit:
-			AddFx(EFx::Puff, Event.Pos + Up, 0.4f, 110.f, FLinearColor::White);
-			AddText(Event.Pos + FVector2f(0.f, -70.f), FString::Printf(TEXT("%d개로 쪼개짐!"), Event.Int), 24.f, YJJUI::Orange, 0.9f);
+			AddFx(EFx::Puff, Event.Pos + Up, UI().FxSplitPuffLife, UI().FxSplitPuffSize, FLinearColor::White);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxSplitTextLift), YJJLoc::Format(TEXT("Fx.Split"), { Event.Int }), UI().FxSplitTextSize, YJJUI::Orange, UI().FxSplitTextLife);
 			break;
 
 		case EYJJSimEvent::EnemyImmune:
-			AddText(Event.Pos + FVector2f(0.f, -76.f), TEXT("안 얼어!"), 22.f, YJJUI::Sky, 0.8f);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxImmuneTextLift), YJJLoc::Get(TEXT("Fx.ChillImmune")), UI().FxImmuneTextSize, YJJUI::Sky, UI().FxImmuneTextLife);
 			break;
 
 		case EYJJSimEvent::EnemyLeaked:
-			AddText(Event.Pos + FVector2f(-40.f, -80.f), FString::Printf(TEXT("목숨 -%d"), Event.Int), 34.f, YJJUI::Red, 1.2f);
-			AddFx(EFx::Burst, Event.Pos + Up, 0.3f, 110.f, YJJUI::Red);
+			AddText(Event.Pos + FVector2f(-UI().FxLeakTextShift, -UI().FxLeakTextLift), YJJLoc::Format(TEXT("Fx.LifeLost"), { Event.Int }), UI().FxLeakTextSize, YJJUI::Red, UI().FxLeakTextLife);
+			AddFx(EFx::Burst, Event.Pos + Up, UI().FxLeakBurstLife, UI().FxLeakBurstSize, YJJUI::Red);
 			break;
 
 		case EYJJSimEvent::TowerBuilt:
 		case EYJJSimEvent::TowerUpgraded:
-			AddFx(EFx::Puff, Event.Pos + FVector2f(0.f, -10.f), 0.42f, 170.f, FLinearColor::White);
-			AddSparks(Event.Pos + FVector2f(0.f, -60.f), 8, YJJUI::Yellow);
+			AddFx(EFx::Puff, Event.Pos - FVector2f(0.f, UI().FxBuildPuffLift), UI().FxBuildPuffLife, UI().FxBuildPuffSize, FLinearColor::White);
+			AddSparks(Event.Pos - FVector2f(0.f, UI().FxBuildSparkLift), FMath::RoundToInt(UI().FxBuildSparks), YJJUI::Yellow, UI().FxSparkSpeed);
 			break;
 
 		case EYJJSimEvent::TowerSold:
-			AddFx(EFx::Puff, Event.Pos + FVector2f(0.f, -10.f), 0.42f, 150.f, FLinearColor::White);
-			AddText(Event.Pos + FVector2f(0.f, -70.f), FString::Printf(TEXT("+%d"), Event.Int), 30.f, YJJUI::Yellow);
+			AddFx(EFx::Puff, Event.Pos - FVector2f(0.f, UI().FxBuildPuffLift), UI().FxBuildPuffLife, UI().FxSellPuffSize, FLinearColor::White);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxSellTextLift), YJJLoc::Format(TEXT("Fx.Gold"), { Event.Int }), UI().FxSellTextSize, YJJUI::Yellow, UI().FxSellTextLife);
 			break;
 
 		case EYJJSimEvent::WizardUpgraded:
-			AddSparks(Event.Pos + FVector2f(0.f, -120.f), 14, YJJUI::Yellow, 220.f);
-			AddText(Event.Pos + FVector2f(0.f, -180.f), TEXT("마력 강화!"), 32.f, YJJUI::Yellow, 1.2f);
+			AddSparks(Event.Pos - FVector2f(0.f, UI().FxWizardSparkLift), FMath::RoundToInt(UI().FxWizardSparks), YJJUI::Yellow, UI().FxWizardSparkSpeed);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxWizardTextLift), YJJLoc::Get(TEXT("Fx.WizardUp")), UI().FxWizardTextSize, YJJUI::Yellow, UI().FxWizardTextLife);
 			break;
 
 		case EYJJSimEvent::ProjectileHit:
-			switch (static_cast<EYJJProjectile>(Event.Int))
-			{
-			case EYJJProjectile::Arrow:
-				AddFx(EFx::Burst, Event.Pos + Up, 0.14f, 34.f, FLinearColor::White);
-				break;
-			case EYJJProjectile::MagicBolt:
-				AddFx(EFx::Burst, Event.Pos + Up, 0.2f, 58.f, YJJUI::Purple);
-				break;
-			case EYJJProjectile::Bomb:
-			{
-				AddFx(EFx::Puff, Event.Pos + FVector2f(0.f, -16.f), 0.4f, Event.Value * 1.9f, YJJUI::Hex(0xFFE9C4));
-				AddFx(EFx::Burst, Event.Pos + FVector2f(0.f, -16.f), 0.22f, Event.Value * 1.4f, YJJUI::Orange);
-				FFx& Ring = AddFx(EFx::Ring, Event.Pos, 0.3f, Event.Value * 0.4f, YJJUI::Orange);
-				Ring.Size2 = Event.Value;
-				break;
-			}
-			case EYJJProjectile::ShrineOrb:
-			{
-				FFx& Ring = AddFx(EFx::Ring, Event.Pos, 0.3f, 10.f, YJJData::ElementColor(Event.Element));
-				Ring.Size2 = Event.Value;
-				break;
-			}
-			default:
-				break;
-			}
+			OnProjectileHit(Event);
 			break;
 
 		case EYJJSimEvent::SpellCast:
-			AddSparks(Event.Pos, 6, YJJData::ElementColor(Event.Element), 140.f);
+			AddSparks(Event.Pos, FMath::RoundToInt(UI().FxCastSparks), YJJData::ElementColor(Event.Element), UI().FxCastSparkSpeed);
 			break;
 
 		case EYJJSimEvent::SpellImpact:
 		{
 			const FLinearColor Color = YJJData::ElementColor(Event.Element);
-			const float Radius = FMath::Max(Event.Value, 34.f);
-			AddFx(EFx::Burst, Event.Pos + FVector2f(0.f, -14.f), 0.2f, Radius * 1.5f, Color);
-			AddFx(EFx::Puff, Event.Pos + FVector2f(0.f, -14.f), 0.34f, Radius * 1.25f, FLinearColor::White);
-			FFx& Ring = AddFx(EFx::Ring, Event.Pos, 0.34f, Radius * 0.3f, Color);
+			const float Radius = FMath::Max(Event.Value, UI().FxImpactMinRadius);
+			const FVector2f Center = Event.Pos - FVector2f(0.f, UI().FxImpactLift);
+			AddFx(EFx::Burst, Center, UI().FxImpactBurstLife, Radius * UI().FxImpactBurstScale, Color);
+			AddFx(EFx::Puff, Center, UI().FxImpactPuffLife, Radius * UI().FxImpactPuffScale, FLinearColor::White);
+			FFx& Ring = AddFx(EFx::Ring, Event.Pos, UI().FxImpactRingLife, Radius * UI().FxImpactRingStart, Color);
 			Ring.Size2 = Radius;
-			AddSparks(Event.Pos + Up, 5, Color);
-			if (Event.Int != 0)
+			const int32 Sparks = FMath::RoundToInt(UI().FxImpactSparks);
+			AddSparks(Event.Pos + Up, Sparks, Color, UI().FxSparkSpeed);
+			if (Event.Int != static_cast<int32>(EYJJElement::None))
 			{
-				AddSparks(Event.Pos + Up, 5, YJJData::ElementColor(static_cast<EYJJElement>(Event.Int)));
+				AddSparks(Event.Pos + Up, Sparks, YJJData::ElementColor(static_cast<EYJJElement>(Event.Int)), UI().FxSparkSpeed);
 			}
 			break;
 		}
 
 		case EYJJSimEvent::Reaction:
 		{
-			const FYJJReactionInfo& Info = YJJSpellForge::ReactionInfo(Event.Reaction);
-			AddFx(EFx::Burst, Event.Pos + FVector2f(0.f, -20.f), 0.28f, FMath::Min(Event.Value * 1.3f, 190.f), Info.Color);
-			FFx& Ring = AddFx(EFx::Ring, Event.Pos, 0.5f, Event.Value * 0.2f, Info.Color);
+			const FYJJReactionDef& Def = YJJData::Reaction(Event.Reaction);
+			AddFx(EFx::Burst, Event.Pos - FVector2f(0.f, UI().FxReactionLift), UI().FxReactionBurstLife,
+				FMath::Min(Event.Value * UI().FxReactionBurstScale, UI().FxReactionBurstMax), Def.Color);
+			FFx& Ring = AddFx(EFx::Ring, Event.Pos, UI().FxReactionRingLife, Event.Value * UI().FxReactionRingStart, Def.Color);
 			Ring.Size2 = Event.Value;
-			FFx& Ring2 = AddFx(EFx::Ring, Event.Pos, 0.7f, Event.Value * 0.1f, FLinearColor::White);
-			Ring2.Size2 = Event.Value * 1.15f;
-			AddSparks(Event.Pos + Up, 10, Info.Color, 240.f);
-			AddText(Event.Pos + FVector2f(0.f, -84.f), FString(Info.Name) + TEXT("!"), 40.f, Info.Color, 1.1f);
+			FFx& Ring2 = AddFx(EFx::Ring, Event.Pos, UI().FxReactionRing2Life, Event.Value * UI().FxReactionRing2Start, FLinearColor::White);
+			Ring2.Size2 = Event.Value * UI().FxReactionRing2End;
+			AddSparks(Event.Pos + Up, FMath::RoundToInt(UI().FxReactionSparks), Def.Color, UI().FxReactionSparkSpeed);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxReactionTextLift), YJJLoc::Format(TEXT("Fx.Reaction"), { YJJLoc::Get(Def.NameKey) }), UI().FxReactionTextSize, Def.Color, UI().FxReactionTextLife);
 			break;
 		}
 
 		case EYJJSimEvent::ChainArc:
 		{
-			FFx& Bolt = AddFx(EFx::Bolt, Event.Pos + Up, 0.22f, 5.f, YJJData::ElementColor(Event.Element));
+			FFx& Bolt = AddFx(EFx::Bolt, Event.Pos + Up, UI().FxChainLife, UI().FxChainWidth, YJJData::ElementColor(Event.Element));
 			Bolt.Pos2 = Event.Pos2 + Up;
 			break;
 		}
 
 		case EYJJSimEvent::SkyBolt:
 		{
-			FFx& Bolt = AddFx(EFx::Bolt, Event.Pos2 + FVector2f(FxRandom.FRandRange(-60.f, 60.f), -520.f), 0.26f, 7.f, YJJUI::Yellow);
-			Bolt.Pos2 = Event.Pos2 + FVector2f(0.f, -10.f);
-			AddFx(EFx::Burst, Event.Pos2 + Up, 0.2f, 80.f, YJJUI::Yellow);
+			const float Sway = UI().FxSkyBoltSway;
+			FFx& Bolt = AddFx(EFx::Bolt, Event.Pos2 + FVector2f(FxRandom.FRandRange(-Sway, Sway), -UI().FxSkyBoltHeight), UI().FxSkyBoltLife, UI().FxSkyBoltWidth, YJJUI::Yellow);
+			Bolt.Pos2 = Event.Pos2 - FVector2f(0.f, UI().FxSkyBoltGround);
+			AddFx(EFx::Burst, Event.Pos2 + Up, UI().FxSkyBoltBurstLife, UI().FxSkyBoltBurstSize, YJJUI::Yellow);
 			break;
 		}
 
 		case EYJJSimEvent::SoldierDied:
-			AddFx(EFx::Puff, Event.Pos + Up, 0.36f, 70.f, FLinearColor::White);
-			AddText(Event.Pos + FVector2f(0.f, -56.f), TEXT("으악"), 22.f, FLinearColor::White, 0.8f);
+			AddFx(EFx::Puff, Event.Pos + Up, UI().FxKillPuffLife, UI().FxSoldierPuffSize, FLinearColor::White);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxSoldierTextLift), YJJLoc::Get(TEXT("Fx.SoldierDown")), UI().FxSoldierTextSize, FLinearColor::White, UI().FxSoldierTextLife);
 			break;
 
 		case EYJJSimEvent::MeleeHit:
-			AddFx(EFx::Burst, Event.Pos + FVector2f(FxRandom.FRandRange(-8.f, 8.f), -22.f), 0.12f, 28.f, FLinearColor::White);
+		{
+			const float Jitter = UI().FxMeleeJitter;
+			AddFx(EFx::Burst, Event.Pos + FVector2f(FxRandom.FRandRange(-Jitter, Jitter), -UI().FxMeleeLift), UI().FxMeleeLife, UI().FxMeleeSize, FLinearColor::White);
 			break;
+		}
 
 		case EYJJSimEvent::Heal:
 		{
-			FFx& Ring = AddFx(EFx::Ring, Event.Pos, 0.5f, 10.f, YJJUI::Pink);
+			FFx& Ring = AddFx(EFx::Ring, Event.Pos, UI().FxHealRingLife, UI().FxHealRingStart, YJJUI::Pink);
 			Ring.Size2 = Event.Value;
-			AddText(Event.Pos + FVector2f(0.f, -74.f), TEXT("힘내라!"), 20.f, YJJUI::Pink, 0.8f);
+			AddText(Event.Pos - FVector2f(0.f, UI().FxHealTextLift), YJJLoc::Get(TEXT("Fx.Heal")), UI().FxHealTextSize, YJJUI::Pink, UI().FxHealTextLife);
 			break;
 		}
 
 		case EYJJSimEvent::WaveStarted:
-			BannerText = Event.Int == YJJData::NumWaves() - 1 ? FString(TEXT("마지막 웨이브!")) : FString::Printf(TEXT("웨이브 %d"), Event.Int + 1);
-			BannerColor = Event.Int == YJJData::NumWaves() - 1 ? YJJUI::Red : FLinearColor::White;
-			BannerTime = 2.2f;
+		{
+			const bool bLast = Event.Int == YJJData::NumWaves() - 1;
+			BannerText = bLast ? YJJLoc::Get(TEXT("Banner.LastWave")) : YJJLoc::Format(TEXT("Banner.Wave"), { Event.Int + 1 });
+			BannerColor = bLast ? YJJUI::Red : FLinearColor::White;
+			BannerTime = UI().BannerWaveTime;
 			break;
+		}
 
 		case EYJJSimEvent::WaveBonus:
-			AddText(FVector2f(1800.f, 930.f), FString::Printf(TEXT("일찍 불러서 +%d"), Event.Int), 26.f, YJJUI::Yellow, 1.4f);
+			AddText(FVector2f(UI().FxBonusTextX, UI().FxBonusTextY), YJJLoc::Format(TEXT("Fx.EarlyBonus"), { Event.Int }), UI().FxBonusTextSize, YJJUI::Yellow, UI().FxBonusTextLife);
 			break;
 
 		case EYJJSimEvent::Victory:
-			BannerText = TEXT("막아냈다!");
+			BannerText = YJJLoc::Get(TEXT("Banner.Victory"));
 			BannerColor = YJJUI::Yellow;
-			BannerTime = 3.f;
+			BannerTime = UI().BannerEndTime;
 			break;
 
 		case EYJJSimEvent::Defeat:
-			BannerText = TEXT("성문이 뚫렸다...");
+			BannerText = YJJLoc::Get(TEXT("Banner.Defeat"));
 			BannerColor = YJJUI::Red;
-			BannerTime = 3.f;
+			BannerTime = UI().BannerEndTime;
 			break;
 
 		default:
@@ -676,9 +740,9 @@ int32 AYJJDefenseHUD::FindSpotAt(const FVector2f& Point) const
 	{
 		// 지어진 타워는 위로 길쭉하다
 		const bool bBuilt = Game && Game->GetSim().Towers.IsValidIndex(Spot) && Game->GetSim().Towers[Spot].bBuilt;
-		const float Top = bBuilt ? -130.f : -52.f;
+		const float Top = bBuilt ? -UI().SpotPickTopBuilt : -UI().SpotPickTopEmpty;
 		const FVector2f Delta = Point - Spots[Spot];
-		if (FMath::Abs(Delta.X) <= 62.f && Delta.Y >= Top && Delta.Y <= 34.f)
+		if (FMath::Abs(Delta.X) <= UI().SpotPickHalfWidth && Delta.Y >= Top && Delta.Y <= UI().SpotPickBottom)
 		{
 			return Spot;
 		}
@@ -709,13 +773,13 @@ void AYJJDefenseHUD::DoAction(const FHitRegion& Region, bool bRightButton)
 		Game->StartRun();
 		break;
 	case EAction::ToggleRune:
-		if (Save && YJJProgression::ToggleRune(*Save, static_cast<EYJJRune>(Region.A)))
+		if (Save && FYJJProgression::ToggleRune(*Save, static_cast<EYJJRune>(Region.A)))
 		{
 			Game->SaveProgress();
 		}
 		break;
 	case EAction::ToggleTower:
-		if (Save && YJJProgression::ToggleTower(*Save, static_cast<EYJJTower>(Region.A)))
+		if (Save && FYJJProgression::ToggleTower(*Save, static_cast<EYJJTower>(Region.A)))
 		{
 			Game->SaveProgress();
 		}
@@ -801,7 +865,7 @@ void AYJJDefenseHUD::UpdateMouse()
 	float MouseY = 0.f;
 	if (PlayerOwner && PlayerOwner->GetMousePosition(MouseX, MouseY))
 	{
-		Mouse = FVector2f((MouseX - ViewOffset.X) / ViewScale, (MouseY - ViewOffset.Y) / ViewScale);
+		Mouse = (FVector2f(MouseX, MouseY) - ViewOffset) / ViewScale;
 	}
 }
 
@@ -813,8 +877,7 @@ void AYJJDefenseHUD::HandleMouseDown(bool bRightButton)
 	}
 	// 마지막으로 그린 프레임 이후 마우스가 움직였을 수 있다 (움직이자마자 누르는 경우)
 	UpdateMouse();
-	UE_LOG(LogYJJHUD, Verbose, TEXT("[Input] mouse %s at (%.0f, %.0f) region=%d"), bRightButton ? TEXT("right") : TEXT("left"), Mouse.X, Mouse.Y,
-		HitAt(Mouse) ? static_cast<int32>(HitAt(Mouse)->Action) : -1);
+	UE_LOG(LogYJJDefense, Verbose, TEXT("[Input] mouse %s at (%.0f, %.0f)"), bRightButton ? TEXT("right") : TEXT("left"), Mouse.X, Mouse.Y);
 
 	if (const FHitRegion* Region = HitAt(Mouse))
 	{
@@ -858,7 +921,7 @@ void AYJJDefenseHUD::HandleMouseUp()
 	UpdateMouse();
 
 	// 가방에서 끌어다 칸에 놓기
-	if (FVector2f::Distance(Mouse, DragStart) > 14.f)
+	if (FVector2f::Distance(Mouse, DragStart) > UI().DragThreshold)
 	{
 		const FHitRegion* Region = HitAt(Mouse);
 		if (Region && Region->Action == EAction::Socket)

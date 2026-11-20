@@ -1,0 +1,233 @@
+﻿Key,ko,en,Note
+Common.ListSeparator,", ",", ",
+Element.Arcane,비전,Arcane,
+Trait.Boss,보스,Boss,
+Trait.Flying,비행,Flying,
+Trait.Fast,빠름,Fast,
+Trait.Armor,갑옷,Armored,
+Trait.MagicResist,마법 저항,Magic resist,
+Trait.Heal,회복,Heals,
+Trait.Split,쪼개짐,Splits,
+Trait.ChillImmune,둔화·빙결 면역,Immune to slow & freeze,
+Rune.Fire.Name,불,Fire,Runes.csv
+Rune.Fire.Spell,파이어볼,Fireball,Runes.csv
+Rune.Fire.Desc,맞은 적을 잠시 불태운다,Sets the target on fire for a while,Runes.csv
+Rune.Ice.Name,얼음,Ice,Runes.csv
+Rune.Ice.Spell,아이스볼,Iceball,Runes.csv
+Rune.Ice.Desc,맞은 적을 느리게 한다,Slows the target,Runes.csv
+Rune.Water.Name,물,Water,Runes.csv
+Rune.Water.Spell,워터볼,Waterball,Runes.csv
+Rune.Water.Desc,넓게 튀어 여럿을 적신다,Splashes wide and soaks many,Runes.csv
+Rune.Lightning.Name,번개,Lightning,Runes.csv
+Rune.Lightning.Spell,라이트닝볼,Lightning ball,Runes.csv
+Rune.Lightning.Desc,강하게 때리고 잠깐 기절시킨다,Hits hard and stuns briefly,Runes.csv
+Rune.Poison.Name,독,Poison,Runes.csv
+Rune.Poison.Spell,포이즌볼,Poison ball,Runes.csv
+Rune.Poison.Desc,오래가는 독을 건다,Applies lasting poison,Runes.csv
+Rune.Wind.Name,바람,Wind,Runes.csv
+Rune.Wind.Spell,윈드볼,Wind ball,Runes.csv
+Rune.Wind.Desc,적을 뒤로 밀어낸다,Pushes enemies back,Runes.csv
+Rune.Explosion.Name,폭발,Explosion,Runes.csv
+Rune.Explosion.Spell,익스플로전,Explosion,Runes.csv
+Rune.Explosion.Desc,닿는 순간 넓게 터진다,Bursts wide on impact,Runes.csv
+Rune.Chain.Name,연쇄,Chain,Runes.csv
+Rune.Chain.Spell,체인,Chain,Runes.csv
+Rune.Chain.Desc,가까운 적에게 옮겨 붙는다,Jumps to nearby enemies,Runes.csv
+Rune.Split.Name,분열,Split,Runes.csv
+Rune.Split.Spell,스플릿,Split,Runes.csv
+Rune.Split.Desc,여러 발로 갈라져 나간다,Splits into several shots,Runes.csv
+Reaction.Evaporate.Name,증발,Evaporate,Reactions.csv
+Reaction.Evaporate.Spell,증발탄,Vapor shot,Reactions.csv
+Reaction.Evaporate.Desc,증발! 맞은 적에게 큰 추가 피해,Evaporate! Big bonus damage to the target,Reactions.csv
+Reaction.Steam.Name,증기,Steam,Reactions.csv
+Reaction.Steam.Spell,증기 폭탄,Steam bomb,Reactions.csv
+Reaction.Steam.Desc,뜨거운 증기 구름이 남아 계속 지진다,A hot steam cloud keeps scalding,Reactions.csv
+Reaction.Overload.Name,과부하,Overload,Reactions.csv
+Reaction.Overload.Spell,과부하 구체,Overload orb,Reactions.csv
+Reaction.Overload.Desc,펑 터지며 적을 뒤로 날린다,Blows up and knocks enemies back,Reactions.csv
+Reaction.Combust.Name,연소,Combust,Reactions.csv
+Reaction.Combust.Spell,연소탄,Combust shot,Reactions.csv
+Reaction.Combust.Desc,독에 불이 붙어 오래 활활 탄다,The poison ignites and burns long,Reactions.csv
+Reaction.Firestorm.Name,화염 폭풍,Firestorm,Reactions.csv
+Reaction.Firestorm.Spell,화염 폭풍,Firestorm,Reactions.csv
+Reaction.Firestorm.Desc,불 회오리가 남아 지나가는 적을 태운다,A fire whirl stays and burns passers-by,Reactions.csv
+Reaction.Freeze.Name,빙결,Freeze,Reactions.csv
+Reaction.Freeze.Spell,빙결탄,Freeze shot,Reactions.csv
+Reaction.Freeze.Desc,꽁꽁 얼려 꼼짝 못 하게 한다,Freezes enemies solid,Reactions.csv
+Reaction.Superconduct.Name,초전도,Superconduct,Reactions.csv
+Reaction.Superconduct.Spell,초전도 구체,Superconduct orb,Reactions.csv
+Reaction.Superconduct.Desc,주변 적이 한동안 피해를 더 받는다,Nearby enemies take more damage for a while,Reactions.csv
+Reaction.Frostbite.Name,동상,Frostbite,Reactions.csv
+Reaction.Frostbite.Spell,동상 독침,Frostbite sting,Reactions.csv
+Reaction.Frostbite.Desc,아주 느려지고 독까지 퍼진다,"Very slow, and poisoned too",Reactions.csv
+Reaction.Blizzard.Name,눈보라,Blizzard,Reactions.csv
+Reaction.Blizzard.Spell,눈보라,Blizzard,Reactions.csv
+Reaction.Blizzard.Desc,넓은 눈보라가 남아 적을 느리게 한다,A wide blizzard stays and slows enemies,Reactions.csv
+Reaction.Electrocute.Name,감전,Electrocute,Reactions.csv
+Reaction.Electrocute.Spell,감전 물벼락,Shock splash,Reactions.csv
+Reaction.Electrocute.Desc,찌릿! 더 넓은 범위에 추가 피해와 기절,Zap! Bonus damage and stun in a wider area,Reactions.csv
+Reaction.Swamp.Name,독늪,Swamp,Reactions.csv
+Reaction.Swamp.Spell,독늪,Toxic swamp,Reactions.csv
+Reaction.Swamp.Desc,끈적한 독 웅덩이가 오래 남는다,A sticky poison pool lingers,Reactions.csv
+Reaction.Tidal.Name,해일,Tidal wave,Reactions.csv
+Reaction.Tidal.Spell,해일,Tidal wave,Reactions.csv
+Reaction.Tidal.Desc,물살이 적을 멀리 떠밀어 보낸다,The current sweeps enemies far back,Reactions.csv
+Reaction.Neurotoxin.Name,신경독,Neurotoxin,Reactions.csv
+Reaction.Neurotoxin.Spell,신경독 번개,Neurotoxin bolt,Reactions.csv
+Reaction.Neurotoxin.Desc,몸이 굳어 오래 기절하고 독에 걸린다,Long stun plus poison,Reactions.csv
+Reaction.Thunderstorm.Name,뇌운,Thunderstorm,Reactions.csv
+Reaction.Thunderstorm.Spell,뇌운,Thundercloud,Reactions.csv
+Reaction.Thunderstorm.Desc,번개가 주변 적 넷에게 떨어진다,Lightning strikes four nearby enemies,Reactions.csv
+Reaction.Plague.Name,역병,Plague,Reactions.csv
+Reaction.Plague.Spell,역병 바람,Plague wind,Reactions.csv
+Reaction.Plague.Desc,독이 바람을 타고 넓게 옮는다,Poison rides the wind and spreads wide,Reactions.csv
+Spell.Empty,비어 있다. 룬을 끌어다 꽂자,Empty. Drag runes in,
+Spell.Stats,피해 {0} · 범위 {1} · 재사용 {2}초,Damage {0} · Radius {1} · Cooldown {2}s,
+Spell.NewCombo,★ 아직 안 써 본 조합! 쓰면 도감에 오른다,★ New combo! Cast it to add it to the book,
+Spell.Amplified,대형 {0},Big {0},
+Spell.Form.Explode,폭발 {0},Exploding {0},
+Spell.Form.Chain,연쇄 {0},Chain {0},
+Spell.Form.Split,삼연발 {0},Triple {0},
+Spell.Pure.Explode2,대폭발,Mega blast,
+Spell.Pure.Chain2,끝없는 연쇄,Endless chain,
+Spell.Pure.Split2,오연발,Quintuple shot,
+Spell.Pure.ExplodeChain,연쇄 폭발,Chain blast,
+Spell.Pure.ExplodeSplit,산탄 폭발,Scatter blast,
+Spell.Pure.ChainSplit,갈래 연쇄,Forked chain,
+Spell.Pure.Explode,비전 폭발,Arcane blast,
+Spell.Pure.Chain,연쇄 화살,Chain bolt,
+Spell.Pure.Split,삼연발,Triple shot,
+Spell.Desc.Element,{0}: {1},{0}: {1},
+Spell.Desc.Amplified,강화: 같은 원소 둘이라 더 크고 아프다,"Amplified: two of the same element, bigger and meaner",
+Spell.Desc.Reaction,반응 [{0}] {1},Reaction [{0}] {1},
+Spell.Desc.Explode,폭발: 닿는 순간 넓게 터진다,Explode: bursts wide on impact,
+Spell.Desc.Explode2,대폭발: 아주 넓게 터진다,Mega blast: bursts very wide,
+Spell.Desc.Chain,연쇄: 가까운 적 {0}명에게 옮겨 붙는다,Chain: jumps to {0} nearby enemies,
+Spell.Desc.Split,분열: {0}발로 갈라진다,Split: splits into {0} shots,
+Spell.Desc.Arcane,비전: 원소가 없는 순수 마법 피해,Arcane: pure magic damage with no element,
+Tower.SoldierStats,병졸 체력 {0} · 공격 {1} · 방어 {2}%,Soldier HP {0} · Attack {1} · Armor {2}%,
+Tower.MagicTag,(마법), (magic),
+Tower.Stats,피해 {0}{1} · {2}초마다 · 사거리 {3},Damage {0}{1} · every {2}s · range {3},
+Tower.Splash, · 폭발 {0}, · splash {0},
+Tower.Archer.Name,궁수 초소,Archer post,Towers.csv
+Tower.Archer.Desc,빠르게 한 놈씩 쏜다. 하늘도 맞힌다,Fast single shots. Hits flyers too,Towers.csv
+Tower.Barracks.Name,보병 막사,Barracks,Towers.csv
+Tower.Barracks.Desc,병졸 셋이 길을 막고 싸운다,Three soldiers block the road and fight,Towers.csv
+Tower.Bombard.Name,대포,Cannon,Towers.csv
+Tower.Bombard.Desc,느리지만 넓게 터진다. 하늘은 못 맞힌다,Slow but wide blasts. Can't hit flyers,Towers.csv
+Tower.Mage.Name,마법사 탑,Mage tower,Towers.csv
+Tower.Mage.Desc,갑옷을 무시하는 마법 화살,Magic bolts that ignore armor,Towers.csv
+Tower.Shrine.Name,정령 제단,Spirit shrine,Towers.csv
+Tower.Shrine.Desc,고른 원소를 적에게 묻혀 반응을 일으킨다,Coats enemies in an element to set up reactions,Towers.csv
+Enemy.WithTraits,{0} ({1}),{0} ({1}),
+Enemy.Imp.Name,꼬마 도깨비,Little imp,Enemies.csv
+Enemy.Chicken.Name,돌진 닭,Charging chicken,Enemies.csv
+Enemy.Potato.Name,근육 감자,Buff potato,Enemies.csv
+Enemy.Toast.Name,날개 식빵,Winged toast,Enemies.csv
+Enemy.Mushroom.Name,응원 버섯,Cheer mushroom,Enemies.csv
+Enemy.PuddingKing.Name,대왕 푸딩,Pudding king,Enemies.csv
+Enemy.Crab.Name,꽃게 병장,Sergeant crab,Enemies.csv
+Enemy.Jellyfish.Name,둥실 해파리,Floaty jellyfish,Enemies.csv
+Enemy.Coconut.Name,코코넛 형님,Big bro coconut,Enemies.csv
+Enemy.CocoKid.Name,코코 알맹이,Coco kid,Enemies.csv
+Enemy.KingCrab.Name,왕꽃게,King crab,Enemies.csv
+Enemy.Snowman.Name,눈사람,Snowman,Enemies.csv
+Enemy.Snowball.Name,눈뭉치,Snowball,Enemies.csv
+Enemy.Penguin.Name,썰매 펭귄,Sled penguin,Enemies.csv
+Enemy.Yeti.Name,예티,Yeti,Enemies.csv
+Map.Map01.Name,꾸벅 들판,Dozy meadow,Maps.csv
+Map.Map01.Desc,졸린 도깨비와 닭이 길을 막는다,Sleepy imps and chickens block the road,Maps.csv
+Map.Map02.Name,꽃게 해변,Crab beach,Maps.csv
+Map.Map02.Desc,"단단한 꽃게는 마법으로, 해파리는 하늘을 노려라","Use magic on tough crabs, aim at the sky for jellyfish",Maps.csv
+Map.Map03.Name,덜덜 설산,Shivering peak,Maps.csv
+Map.Map03.Desc,눈사람은 녹으면 둘이 된다. 펭귄은 얼지 않는다,Snowmen split in two. Penguins don't freeze,Maps.csv
+Fx.Gold,+{0},+{0},
+Fx.Split,{0}개로 쪼개짐!,Split into {0}!,
+Fx.ChillImmune,안 얼어!,Can't freeze me!,
+Fx.LifeLost,목숨 -{0},Lives -{0},
+Fx.WizardUp,마력 강화!,Power up!,
+Fx.Reaction,{0}!,{0}!,
+Fx.SoldierDown,으악,Argh,
+Fx.Heal,힘내라!,Go go!,
+Banner.LastWave,마지막 웨이브!,Final wave!,
+Banner.Wave,웨이브 {0},Wave {0},
+Fx.EarlyBonus,일찍 불러서 +{0},Early call +{0},
+Banner.Victory,막아냈다!,Defended!,
+Banner.Defeat,성문이 뚫렸다...,The gate fell...,
+Pause.Title,잠깐 멈춤,Paused,
+Pause.Hint,P를 누르면 계속,Press P to resume,
+Top.Wave,웨이브 {0}/{1},Wave {0}/{1},
+Top.MapTier,{0} · {1}단계,{0} · Tier {1},
+Tip.Pause.Title,잠깐 멈춤 (P),Pause (P),
+Tip.Pause.Body,멈춘 동안에도 룬은 바꿔 끼울 수 있다,You can still swap runes while paused,
+Tip.Speed.Title,배속 (F),Speed (F),
+Tip.Speed.Body,지금 {0}배속,Now at {0}x,
+Bag.Title,룬 가방,Rune bag,
+Tip.BagRune.Title,{0} 룬 · {1},{0} rune · {1},
+Tip.BagRune.Body,끌어다 디스크 칸에 놓으면 조합된다,Drop it into a disk socket to combine,
+Bag.PickSocket,꽂을 칸을 누르세요,Click a socket,
+Bag.Hint,끌어서 디스크에 꽂기,Drag onto a disk,
+Disk.Empty,빈 디스크,Empty disk,
+Tip.Disk.Controls,좌클릭: 조준 · 칸 우클릭: 룬 빼기,Left click: aim · Right click a socket: remove rune,
+Wizard.Level,마력 Lv{0},Power Lv{0},
+Wizard.Max,최고,Max,
+Tip.Wizard.Maxed,더 올릴 수 없다,Already at max,
+Tip.Wizard.Body,모든 스펠 피해 x{0} > x{1}\n재사용 대기 {2}% 단축,All spell damage x{0} > x{1}\nCooldown {2}% shorter,
+Tip.Wizard.Title,마력 강화,Power up,
+Wave.Group,{0} x{1},{0} x{1},
+Wave.GroupTraits,{0} x{1}  ({2}),{0} x{1}  ({2}),
+Wave.EnemiesLeft,남은 적 {0},{0} enemies left,
+Wave.Last,마지막 웨이브,Final wave,
+Wave.Go,출발!,Go!,
+Wave.GoKey,스페이스,Space,
+Wave.Incoming,몰려온다,Incoming,
+Wave.Timer,{0}초,{0}s,
+Wave.EarlyBonus,지금 부르면 +{0},Call now +{0},
+Tip.NextWave,다음: 웨이브 {0},Next: wave {0},
+Menu.Upgrade,{0} Lv{1} > Lv{2},{0} Lv{1} > Lv{2},
+Menu.Cycle.Title,원소 바꾸기 (지금: {0}),Change element (now: {0}),
+Menu.Cycle.Body,제단이 묻히는 원소를 바꾼다.\n스펠과 다른 원소여야 반응이 일어난다,Changes the element the shrine applies.\nIt must differ from your spell to react,
+Menu.Sell.Title,팔기,Sell,
+Menu.Sell.Body,쓴 돈의 {0}%를 돌려받는다,Refunds {0}% of what you spent,
+Menu.Header,{0} Lv{1},{0} Lv{1},
+Loadout.Title,YJJ 디펜스,YJJ Defense,
+Loadout.Subtitle,"룬을 모으고, 섞고, 한 판 더!","Collect runes, mix them, one more run!",
+Loadout.Start,출전!,Fight!,
+Loadout.StartKey,엔터 / 스페이스,Enter / Space,
+Loadout.Runes,룬 수집,Runes,
+Loadout.RuneBag,가방 {0}/{1},Bag {0}/{1},
+Loadout.UnlockAt,수집 {0}점,{0} points,
+Loadout.ElementRune,원소 룬,element rune,
+Loadout.FormRune,형태 룬,form rune,
+Loadout.LockedHint,수집 점수를 모으면 풀린다,Unlocks with collection points,
+Loadout.RemoveHint,눌러서 가방에서 빼기,Click to take it out,
+Loadout.AddHint,눌러서 가방에 넣기,Click to pack it,
+Loadout.RuneTip,{0} ({1}),{0} ({1}),
+Loadout.Towers,병졸 수집,Troops,
+Loadout.TowerBag,출전 {0}/{1},Squad {0}/{1},
+Loadout.Tier,도전 단계,Challenge tier,
+Loadout.TierValue,{0}단계,Tier {0},
+Loadout.TierBase,몬스터 체력 기본,Normal monster HP,
+Loadout.TierHP,몬스터 체력 +{0}%,Monster HP +{0}%,
+Loadout.TierHint,이 단계를 깨면 다음 단계가 열린다,Clear this tier to open the next,
+Loadout.Points,수집 점수 {0},Collection points {0},
+Loadout.PointsOf,{0} / {1},{0} / {1},
+Loadout.NextUnlock,다음 수집: {0},Next unlock: {0},
+Loadout.AllUnlocked,전부 모았다! 이제 실력으로 승부,All collected! Now it's down to skill,
+Loadout.ComboBook,조합 도감,Combo book,
+Loadout.ComboHint,룬을 다 모으면 {0}가지 · 새 조합을 쓰면 점수 +1,{0} combos with every rune · new combos give +1 point,
+Loadout.Record,플레이 {0}판 · 승리 {1}번,{0} runs · {1} wins,
+Loadout.MapName,{0}. {1},{0}. {1},
+Loadout.MapLocked,{0} (잠김),{0} (locked),
+Loadout.MapLockedHint,앞 지도를 깨면 열린다,Clear the previous map to open it,
+Result.Waves,버틴 웨이브 {0}/{1},Waves held {0}/{1},
+Result.Victory,승리,Victory,
+Result.Stars,별 {0}개,{0} stars,
+Result.Combos,새로 발견한 조합 {0}가지,{0} new combos found,
+Result.Total,수집 점수,Collection points,
+Result.TotalValue,+{0}  (총 {1}),+{0}  (total {1}),
+Result.NextUnlock,"다음 수집 ""{0}""까지 {1}점","{1} points to ""{0}""",
+Result.NewItem,새로 얻었다!,New!,
+Result.NewMap,새 지도!,New map!,
+Result.NewTier,다음 단계 열림,Next tier open,
+Result.Again,한 판 더,One more run,

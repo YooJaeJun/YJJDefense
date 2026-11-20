@@ -1,16 +1,64 @@
 // 전투 화면: 맵, 병졸, 몬스터, 투사체, 그리고 전투 UI (상단 정보, 스펠 바, 타워 메뉴)
 
 #include "UI/YJJDefenseHUD.h"
+#include "Data/YJJLoc.h"
+#include "Data/YJJTuning.h"
+#include "Data/YJJUILayout.h"
 #include "Engine/Canvas.h"
 #include "Engine/Texture2D.h"
 #include "Game/YJJGameData.h"
 #include "UI/YJJUIStyle.h"
 #include "YJJDefenseGameMode.h"
 
+// ---------------------------------------------------------------------------------------------
+// 버튼 자리 (그리기와 UI 테스트가 같이 쓴다)
+
+FVector2f AYJJDefenseHUD::BagRuneCenter(int32 BagIndex)
+{
+	const int32 Columns = FMath::RoundToInt(UI().BagColumns);
+	const float X = UI().BagX + UI().BagSpacing * (BagIndex % Columns);
+	const float Y = UI().BagY + UI().BagSpacing * (BagIndex / Columns);
+	return FVector2f(X, Y) + FVector2f(UI().BagIcon, UI().BagIcon) * 0.5f;
+}
+
+FVector2f AYJJDefenseHUD::DiskCenter(int32 Disk)
+{
+	return FVector2f(UI().DiskFirstX + UI().DiskSpacing * Disk, UI().DiskY);
+}
+
+FVector2f AYJJDefenseHUD::SocketCenter(int32 Disk, int32 Socket)
+{
+	return DiskCenter(Disk) + FVector2f((Socket == 0 ? -1.f : 1.f) * (UI().SocketSize * 0.5f + UI().SocketGap), 0.f);
+}
+
+FVector2f AYJJDefenseHUD::TowerMenuButtonCenter(const FVector2f& Spot, int32 NumOptions, int32 Index, bool bBuilt)
+{
+	const float ButtonW = UI().MenuButtonW;
+	const float Gap = UI().MenuButtonGap;
+	const float Margin = UI().MenuScreenMargin;
+	const float TotalW = NumOptions * ButtonW + (NumOptions - 1) * Gap;
+	const float Top = Spot.Y - (bBuilt ? UI().MenuAboveBuilt : UI().MenuAboveEmpty);
+	const float X0 = FMath::Clamp(Spot.X - TotalW * 0.5f, Margin, YJJ::ViewW - TotalW - Margin);
+	const float Y0 = Top < UI().MenuMinTop ? Spot.Y + UI().MenuBelowOffset : Top;
+	return FVector2f(X0 + Index * (ButtonW + Gap) + ButtonW * 0.5f, Y0 + UI().MenuButtonH * 0.5f);
+}
+
+FVector2f AYJJDefenseHUD::WaveButtonCenter()
+{
+	return FVector2f(UI().WaveButtonX + UI().WaveButtonW * 0.5f, UI().WaveButtonY + UI().WaveButtonH * 0.5f);
+}
+
+FVector2f AYJJDefenseHUD::PauseButtonCenter()
+{
+	return FVector2f(UI().PauseButtonX + UI().TopButtonW * 0.5f, UI().TopBarY + UI().TopBarH * 0.5f);
+}
+
+// ---------------------------------------------------------------------------------------------
+
 void AYJJDefenseHUD::DrawDimmedMap(float Darkness, int32 Map)
 {
 	Map = Map == INDEX_NONE ? YJJMap::GetActive() : Map;
-	DrawSprite(MapTextures[FMath::Clamp(Map, 0, static_cast<int32>(UE_ARRAY_COUNT(MapTextures)) - 1)], FVector2f(YJJ::ViewW * 0.5f, YJJ::ViewH * 0.5f), FVector2f(YJJ::ViewW, YJJ::ViewH));
+	DrawSprite(MapTex(Map), FVector2f(YJJ::ViewW * 0.5f, YJJ::ViewH * 0.5f), FVector2f(YJJ::ViewW, YJJ::ViewH));
 	if (Darkness > 0.f)
 	{
 		DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, Darkness));
@@ -19,33 +67,16 @@ void AYJJDefenseHUD::DrawDimmedMap(float Darkness, int32 Map)
 
 void AYJJDefenseHUD::DrawBattle(bool bInteractive)
 {
-	const FYJJDefenseSim& Sim = Game->GetSim();
-
 	// 이펙트는 게임 배속을 따라가고, 일시정지하면 멈춘다
 	const bool bRunning = bInteractive && !Game->IsBattlePaused();
-	const float FxDelta = bRunning ? GetWorld()->GetDeltaSeconds() * FMath::Min(Game->GetSpeed(), 2.f) : 0.f;
+	const float FxDelta = bRunning ? GetWorld()->GetDeltaSeconds() * FMath::Min(Game->GetSpeed(), UI().FxMaxSpeed) : 0.f;
 
 	DrawDimmedMap(0.f);
 	DrawZones();
-
-	// 고른 자리의 사거리 (타워보다 먼저 그려 바닥에 깔리게)
-	if (bInteractive && Sim.Towers.IsValidIndex(SelectedSpot))
+	if (bInteractive)
 	{
-		const FYJJTowerState& Tower = Sim.Towers[SelectedSpot];
-		const FVector2f SpotPos = YJJMap::Spots()[SelectedSpot];
-		if (Tower.bBuilt)
-		{
-			const int32 Level = bHoverUpgrade ? FMath::Min(Tower.Level + 1, YJJ::MaxTowerLevel) : Tower.Level;
-			DrawEllipseRange(SpotPos, YJJData::Tower(Tower.Type).Levels[Level].Range, bHoverUpgrade ? YJJUI::Green : FLinearColor::White);
-			if (Tower.Type == EYJJTower::Barracks)
-			{
-				DrawEllipseRange(Tower.Rally, YJJData::SoldierEngageRange, YJJUI::Sky);
-			}
-		}
-		else if (HoverBuildType != INDEX_NONE)
-		{
-			DrawEllipseRange(SpotPos, YJJData::Tower(static_cast<EYJJTower>(HoverBuildType)).Levels[0].Range, FLinearColor::White);
-		}
+		// 타워보다 먼저 그려 바닥에 깔리게
+		DrawSelectedRange();
 	}
 
 	DrawWorldSorted();
@@ -66,10 +97,40 @@ void AYJJDefenseHUD::DrawBattle(bool bInteractive)
 
 	if (Game->IsBattlePaused())
 	{
-		DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, 0.35f));
-		DrawLabel(TEXT("잠깐 멈춤"), YJJ::ViewW * 0.5f, 470.f, 84.f, FLinearColor::White, EAlign::Center, 8.f);
-		DrawLabel(TEXT("P를 누르면 계속"), YJJ::ViewW * 0.5f, 550.f, 30.f, YJJUI::Cream, EAlign::Center, 5.f);
+		DrawPauseOverlay();
 	}
+}
+
+void AYJJDefenseHUD::DrawSelectedRange()
+{
+	const FYJJDefenseSim& Sim = Game->GetSim();
+	if (!Sim.Towers.IsValidIndex(SelectedSpot))
+	{
+		return;
+	}
+
+	const FYJJTowerState& Tower = Sim.Towers[SelectedSpot];
+	const FVector2f SpotPos = YJJMap::Spots()[SelectedSpot];
+	if (Tower.bBuilt)
+	{
+		const int32 Level = bHoverUpgrade ? FMath::Min(Tower.Level + 1, YJJ::MaxTowerLevel) : Tower.Level;
+		DrawEllipseRange(SpotPos, YJJData::Tower(Tower.Type).Levels[Level].Range, bHoverUpgrade ? YJJUI::Green : FLinearColor::White);
+		if (Tower.Type == EYJJTower::Barracks)
+		{
+			DrawEllipseRange(Tower.Rally, YJJData::Tune().SoldierEngageRange, YJJUI::Sky);
+		}
+	}
+	else if (HoverBuildType != INDEX_NONE)
+	{
+		DrawEllipseRange(SpotPos, YJJData::Tower(static_cast<EYJJTower>(HoverBuildType)).Levels[0].Range, FLinearColor::White);
+	}
+}
+
+void AYJJDefenseHUD::DrawPauseOverlay()
+{
+	DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, UI().PauseDim));
+	DrawLabel(YJJLoc::Get(TEXT("Pause.Title")), YJJ::ViewW * 0.5f, UI().PauseTitleY, UI().PauseTitleSize, FLinearColor::White, EAlign::Center, UI().PauseTitleOutline);
+	DrawLabel(YJJLoc::Get(TEXT("Pause.Hint")), YJJ::ViewW * 0.5f, UI().PauseHintY, UI().PauseHintSize, YJJUI::Cream, EAlign::Center, UI().PauseHintOutline);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -77,23 +138,27 @@ void AYJJDefenseHUD::DrawBattle(bool bInteractive)
 
 void AYJJDefenseHUD::DrawZones()
 {
+	const int32 Blobs = FMath::RoundToInt(UI().ZoneBlobs);
 	for (const FYJJZoneState& Zone : Game->GetSim().Zones)
 	{
-		const FLinearColor Color = YJJSpellForge::ReactionInfo(Zone.Kind).Color;
-		const float Life = Zone.Time / FMath::Max(Zone.Duration, 0.01f);
-		const float Fade = FMath::Clamp(Zone.Time * 5.f, 0.f, 1.f) * FMath::Clamp((1.f - Life) * 4.f, 0.f, 1.f);
-		const float Pulse = 1.f + 0.04f * FMath::Sin(UITime * 5.f + Zone.Pos.X);
+		const FLinearColor Color = YJJData::Reaction(Zone.Kind).Color;
+		const float Life = Zone.Time / FMath::Max(Zone.Duration, KINDA_SMALL_NUMBER);
+		const float Fade = FMath::Clamp(Zone.Time * UI().ZoneFadeInSpeed, 0.f, 1.f) * FMath::Clamp((1.f - Life) * UI().ZoneFadeOutSpeed, 0.f, 1.f);
+		const float Pulse = 1.f + UI().ZonePulse * FMath::Sin(UITime * UI().ZonePulseSpeed + Zone.Pos.X);
 		const FVector2f Size(Zone.Radius * 2.f * Pulse, Zone.Radius * 2.f * Pulse / YJJ::YStretch);
 
-		DrawSprite(DiscTexture, Zone.Pos, Size * 1.15f, YJJUI::WithAlpha(Color, 0.5f * Fade));
-		DrawSprite(RingTexture, Zone.Pos, Size, YJJUI::WithAlpha(Color, 0.9f * Fade));
+		DrawSprite(DiscTexture, Zone.Pos, Size * UI().ZoneFillScale, YJJUI::WithAlpha(Color, UI().ZoneFillAlpha * Fade));
+		DrawSprite(RingTexture, Zone.Pos, Size, YJJUI::WithAlpha(Color, UI().ZoneRingAlpha * Fade));
 
 		// 장판 위를 도는 몽실한 덩어리들
-		for (int32 Index = 0; Index < 5; ++Index)
+		for (int32 Index = 0; Index < Blobs; ++Index)
 		{
-			const float Angle = UITime * 1.6f + Index * UE_TWO_PI / 5.f + Zone.Pos.Y;
-			const FVector2f Offset(FMath::Cos(Angle) * Zone.Radius * 0.55f, FMath::Sin(Angle) * Zone.Radius * 0.55f / YJJ::YStretch - 16.f);
-			DrawSprite(PuffTextures[0], Zone.Pos + Offset, FVector2f(46.f, 46.f), YJJUI::WithAlpha(FMath::Lerp(Color, FLinearColor::White, 0.35f), 0.85f * Fade));
+			const float Angle = UITime * UI().ZoneBlobSpin + Index * UE_TWO_PI / Blobs + Zone.Pos.Y;
+			const float Orbit = Zone.Radius * UI().ZoneBlobOrbit;
+			const FVector2f Offset(FMath::Cos(Angle) * Orbit, FMath::Sin(Angle) * Orbit / YJJ::YStretch - UI().ZoneBlobLift);
+			const float BlobSize = UI().ZoneBlobSize;
+			DrawSprite(PuffTextures[0], Zone.Pos + Offset, FVector2f(BlobSize, BlobSize),
+				YJJUI::WithAlpha(FMath::Lerp(Color, FLinearColor::White, UI().ZoneBlobWhiten), UI().ZoneBlobAlpha * Fade));
 		}
 	}
 }
@@ -102,26 +167,19 @@ void AYJJDefenseHUD::DrawWorldSorted()
 {
 	const FYJJDefenseSim& Sim = Game->GetSim();
 
-	// 아래쪽에 있는 것이 위를 덮도록 y순으로 그린다
-	enum class EKind : uint8 { Spot, Soldier, Enemy, Wizard };
-	struct FItem
-	{
-		float Y;
-		EKind Kind;
-		int32 Index;
-	};
-	TArray<FItem, TInlineAllocator<256>> Items;
+	constexpr int32 InlineItems = 256;
+	TArray<FWorldItem, TInlineAllocator<InlineItems>> Items;
 
 	const TConstArrayView<FVector2f> Spots = YJJMap::Spots();
 	for (int32 Spot = 0; Spot < Spots.Num(); ++Spot)
 	{
-		Items.Add({ Spots[Spot].Y + (Sim.Towers[Spot].bBuilt ? 22.f : -30.f), EKind::Spot, Spot });
+		Items.Add({ Spots[Spot].Y + (Sim.Towers[Spot].bBuilt ? UI().SortBuiltTower : -UI().SortEmptySpot), EWorldItem::Spot, Spot });
 	}
 	for (int32 Index = 0; Index < Sim.Soldiers.Num(); ++Index)
 	{
 		if (Sim.Soldiers[Index].IsAlive())
 		{
-			Items.Add({ Sim.Soldiers[Index].Pos.Y, EKind::Soldier, Index });
+			Items.Add({ Sim.Soldiers[Index].Pos.Y, EWorldItem::Soldier, Index });
 		}
 	}
 	for (int32 Index = 0; Index < Sim.Enemies.Num(); ++Index)
@@ -129,202 +187,254 @@ void AYJJDefenseHUD::DrawWorldSorted()
 		const FYJJEnemyState& Enemy = Sim.Enemies[Index];
 		if (Enemy.IsAlive())
 		{
-			Items.Add({ Enemy.Pos.Y + (YJJData::Enemy(Enemy.Type).bFlying ? 60.f : 0.f), EKind::Enemy, Index });
+			Items.Add({ Enemy.Pos.Y + (YJJData::Enemy(Enemy.Type).bFlying ? UI().SortFlying : 0.f), EWorldItem::Enemy, Index });
 		}
 	}
-	Items.Add({ YJJMap::WizardPos().Y, EKind::Wizard, 0 });
+	Items.Add({ YJJMap::WizardPos().Y, EWorldItem::Wizard, 0 });
 
-	Items.StableSort([](const FItem& A, const FItem& B) { return A.Y < B.Y; });
+	Items.StableSort([](const FWorldItem& A, const FWorldItem& B) { return A.Y < B.Y; });
 
-	for (const FItem& Item : Items)
+	for (const FWorldItem& Item : Items)
 	{
 		switch (Item.Kind)
 		{
-		case EKind::Spot: DrawSpot(Item.Index); break;
-		case EKind::Soldier: DrawSoldier(Sim.Soldiers[Item.Index]); break;
-		case EKind::Enemy: DrawEnemy(Sim.Enemies[Item.Index]); break;
-		case EKind::Wizard: DrawWizard(); break;
+		case EWorldItem::Spot: DrawSpot(Item.Index); break;
+		case EWorldItem::Soldier: DrawSoldier(Sim.Soldiers[Item.Index]); break;
+		case EWorldItem::Enemy: DrawEnemy(Sim.Enemies[Item.Index]); break;
+		case EWorldItem::Wizard: DrawWizard(); break;
 		}
 	}
 }
 
-void AYJJDefenseHUD::DrawSpot(int32 Spot)
+void AYJJDefenseHUD::DrawEmptySpot(int32 Spot, bool bHover, bool bSelected)
 {
 	const FYJJDefenseSim& Sim = Game->GetSim();
-	const FYJJTowerState& Tower = Sim.Towers[Spot];
+	const FVector2f SpotPos = YJJMap::Spots()[Spot];
+	const bool bActive = bHover || bSelected;
+
+	// 지을 돈이 있으면 노랗게 숨 쉬듯 빛나서 "여기 지을 수 있다"가 바로 보이게
+	int32 Cheapest = MAX_int32;
+	for (int32 Index = 0; Index < static_cast<int32>(EYJJTower::Count); ++Index)
+	{
+		if (Sim.HasTower(static_cast<EYJJTower>(Index)))
+		{
+			Cheapest = FMath::Min(Cheapest, YJJData::Tower(static_cast<EYJJTower>(Index)).Levels[0].Cost);
+		}
+	}
+	const bool bAffordable = Sim.Gold >= Cheapest;
+	const float Pulse = 0.5f + 0.5f * FMath::Sin(UITime * UI().SpotPulseSpeed + Spot * UI().SpotPulsePhase);
+	const FLinearColor Glow = bActive ? FLinearColor::White : (bAffordable ? YJJUI::Yellow : YJJUI::SpotIdleGlow);
+	const float GlowAlpha = bActive ? UI().SpotGlowActive : (bAffordable ? UI().SpotGlowReady + UI().SpotGlowReadyPulse * Pulse : UI().SpotGlowIdle);
+	const float RingAlpha = bActive ? 1.f : (bAffordable ? UI().SpotRingReady + UI().SpotRingReadyPulse * Pulse : UI().SpotRingIdle);
+	const FVector2f GlowCenter = SpotPos + FVector2f(0.f, UI().SpotGlowDown);
+	DrawSprite(DiscTexture, GlowCenter, FVector2f(UI().SpotGlowW, UI().SpotGlowH) * (1.f + UI().SpotGlowPulse * Pulse), YJJUI::WithAlpha(Glow, GlowAlpha));
+	DrawSprite(DashRingTexture, GlowCenter, FVector2f(UI().SpotRingW, UI().SpotRingH) * (1.f + UI().SpotRingPulse * Pulse), YJJUI::WithAlpha(Glow, RingAlpha));
+
+	// 받침 윗면 중심(그림 높이의 SpotTopShare)이 자리 좌표에 오게
+	const FVector2f Size = TexSize(SpotTexture) * UI().SpriteScale * (bActive ? UI().SpotHoverGrow : 1.f);
+	const float Hop = bActive ? UI().SpotHoverHop : 0.f;
+	DrawSprite(SpotTexture, SpotPos + FVector2f(0.f, Size.Y * (0.5f - UI().SpotTopShare) - Hop), Size, bSelected ? YJJUI::SpotSelected : FLinearColor::White);
+}
+
+void AYJJDefenseHUD::DrawSpot(int32 Spot)
+{
+	const FYJJTowerState& Tower = Game->GetSim().Towers[Spot];
 	const FVector2f SpotPos = YJJMap::Spots()[Spot];
 	const bool bSelected = Spot == SelectedSpot;
 	const bool bHover = FindSpotAt(Mouse) == Spot && HitAt(Mouse) == nullptr && ArmedDisk == INDEX_NONE;
 
 	if (!Tower.bBuilt)
 	{
-		// 지을 돈이 있으면 노랗게 숨 쉬듯 빛나서 "여기 지을 수 있다"가 바로 보이게
-		int32 Cheapest = MAX_int32;
-		for (int32 Index = 0; Index < static_cast<int32>(EYJJTower::Count); ++Index)
-		{
-			if (Sim.HasTower(static_cast<EYJJTower>(Index)))
-			{
-				Cheapest = FMath::Min(Cheapest, YJJData::Tower(static_cast<EYJJTower>(Index)).Levels[0].Cost);
-			}
-		}
-		const bool bAffordable = Sim.Gold >= Cheapest;
-		const float Pulse = 0.5f + 0.5f * FMath::Sin(UITime * 3.5f + Spot * 0.7f);
-		const FLinearColor Glow = (bHover || bSelected) ? FLinearColor::White : (bAffordable ? YJJUI::Yellow : YJJUI::Hex(0xE8F6D8));
-		const float GlowAlpha = (bHover || bSelected) ? 0.85f : (bAffordable ? 0.45f + 0.3f * Pulse : 0.3f);
-		DrawSprite(DiscTexture, SpotPos + FVector2f(0.f, 4.f), FVector2f(210.f, 92.f) * (1.f + 0.04f * Pulse), YJJUI::WithAlpha(Glow, GlowAlpha));
-		DrawSprite(DashRingTexture, SpotPos + FVector2f(0.f, 4.f), FVector2f(176.f, 74.f) * (1.f + 0.05f * Pulse),
-			YJJUI::WithAlpha(Glow, (bHover || bSelected) ? 1.f : (bAffordable ? 0.6f + 0.4f * Pulse : 0.45f)));
-
-		// 받침 윗면 중심(그림의 y=100/156)이 자리 좌표에 오게
-		const FVector2f Size = TexSize(SpotTexture) * 0.5f * ((bHover || bSelected) ? 1.08f : 1.f);
-		const float Hop = (bHover || bSelected) ? 3.f : 0.f;
-		DrawSprite(SpotTexture, SpotPos + FVector2f(0.f, Size.Y * (0.5f - 100.f / 156.f) - Hop), Size, bSelected ? YJJUI::Hex(0xFFF3B0) : FLinearColor::White);
+		DrawEmptySpot(Spot, bHover, bSelected);
 		return;
 	}
 
 	// 지을 때 통통 튀고, 쏠 때 살짝 움찔한다
+	const FYJJTuning& Tune = YJJData::Tune();
 	FVector2f Scale(1.f, 1.f);
 	if (Tower.BuildAnim > 0.f)
 	{
-		const float T = Tower.BuildAnim / 0.35f;
-		Scale = FVector2f(1.f + 0.18f * T, 1.f - 0.2f * T * FMath::Cos(T * 9.f));
+		const float T = Tower.BuildAnim / Tune.TowerBuildAnim;
+		Scale = FVector2f(1.f + UI().TowerBuildStretchX * T, 1.f - UI().TowerBuildSquashY * T * FMath::Cos(T * UI().TowerBuildWobble));
 	}
 	else if (Tower.FireAnim > 0.f)
 	{
-		const float T = Tower.FireAnim / 0.25f;
-		Scale = FVector2f(1.f + 0.05f * T, 1.f - 0.06f * T);
+		const float T = Tower.FireAnim / Tune.TowerFireAnim;
+		Scale = FVector2f(1.f + UI().TowerFireStretchX * T, 1.f - UI().TowerFireSquashY * T);
 	}
 
-	const FVector2f Feet = SpotPos + FVector2f(0.f, 24.f);
-	DrawSprite(ShadowTexture, Feet + FVector2f(0.f, -6.f), FVector2f(120.f, 34.f));
+	const FVector2f Feet = SpotPos + FVector2f(0.f, UI().TowerFeetDown);
+	DrawSprite(ShadowTexture, Feet - FVector2f(0.f, UI().TowerShadowUp), FVector2f(UI().TowerShadowW, UI().TowerShadowH));
 	UTexture2D* Texture = TowerTextures[static_cast<int32>(Tower.Type)][Tower.Level];
-	const FLinearColor Tint = (bHover || bSelected) ? YJJUI::Hex(0xFFF7D0) : FLinearColor::White;
+	const FLinearColor Tint = (bHover || bSelected) ? YJJUI::TowerHover : FLinearColor::White;
 	DrawSpriteFeet(Texture, Feet, Scale, Tint, Tower.bAimLeft && Tower.Type != EYJJTower::Barracks && Tower.Type != EYJJTower::Shrine);
 
 	if (Tower.Type == EYJJTower::Shrine)
 	{
 		// 그릇 위에 떠 있는 원소 구슬
-		const FVector2f Orb = Feet + FVector2f(0.f, -(21.f + 38.f * (Tower.Level + 1)) * Scale.Y - 8.f + FMath::Sin(UITime * 3.f + Spot) * 4.f);
+		const float Height = (UI().ShrineOrbBase + UI().ShrineOrbPerLevel * (Tower.Level + 1)) * Scale.Y + UI().ShrineOrbLift;
+		const float Bob = FMath::Sin(UITime * UI().ShrineOrbBobSpeed + Spot) * UI().ShrineOrbBob;
+		const FVector2f Orb = Feet + FVector2f(0.f, -Height + Bob);
 		const FLinearColor Color = YJJData::ElementColor(Tower.ShrineElement);
-		DrawSprite(DiscTexture, Orb, FVector2f(64.f, 64.f), YJJUI::WithAlpha(Color, 0.55f));
-		DrawSprite(BallTex(Tower.ShrineElement), Orb, FVector2f(38.f, 38.f));
+		const float Glow = UI().ShrineOrbGlow;
+		const float Ball = UI().ShrineOrbSize;
+		DrawSprite(DiscTexture, Orb, FVector2f(Glow, Glow), YJJUI::WithAlpha(Color, UI().ShrineOrbGlowAlpha));
+		DrawSprite(BallTex(Tower.ShrineElement), Orb, FVector2f(Ball, Ball));
 	}
 }
 
 void AYJJDefenseHUD::DrawEnemy(const FYJJEnemyState& Enemy)
 {
 	const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
-	UTexture2D* Texture = EnemyTextures[static_cast<int32>(Enemy.Type)][FMath::FloorToInt(Enemy.AnimTime * (Def.bFlying ? 7.f : 5.f)) & 1];
-	const FVector2f Size = TexSize(Texture) * 0.5f;
+	const float FrameRate = Def.bFlying ? UI().EnemyFlyFrameRate : UI().EnemyWalkFrameRate;
+	UTexture2D* Texture = EnemyTextures[static_cast<int32>(Enemy.Type)][FMath::FloorToInt(Enemy.AnimTime * FrameRate) % EnemyFrames];
+	const FVector2f Size = TexSize(Texture) * UI().SpriteScale;
 
-	FVector2f Feet = Enemy.Pos + FVector2f(0.f, 6.f);
-	DrawSprite(ShadowTexture, Enemy.Pos + FVector2f(0.f, 2.f), FVector2f(Size.X * 0.85f, Size.X * 0.26f));
+	FVector2f Feet = Enemy.Pos + FVector2f(0.f, UI().UnitFeetDown);
+	DrawSprite(ShadowTexture, Enemy.Pos + FVector2f(0.f, UI().UnitShadowDown), FVector2f(Size.X * UI().EnemyShadowW, Size.X * UI().EnemyShadowH));
 	if (Def.bFlying)
 	{
-		Feet.Y -= 46.f + FMath::Sin(Enemy.AnimTime * 4.f) * 5.f;
+		Feet.Y -= UI().FlyHeight + FMath::Sin(Enemy.AnimTime * UI().FlyBobSpeed) * UI().FlyBob;
 	}
 
 	// 상태에 따라 색이 변한다
 	FLinearColor Tint = FLinearColor::White;
 	if (Enemy.FreezeTime > 0.f)
 	{
-		Tint = YJJUI::Hex(0xA8E4FF);
+		Tint = YJJUI::FrozenTint;
 	}
 	else if (Enemy.PoisonTime > 0.f)
 	{
-		Tint = YJJUI::Hex(0xC9F29A);
+		Tint = YJJUI::PoisonTint;
 	}
 	else if (Enemy.SlowTime > 0.f)
 	{
-		Tint = YJJUI::Hex(0xC4E6FF);
-	}
-	if (Enemy.HitFlash > 0.f)
-	{
-		Tint = FMath::Lerp(Tint, YJJUI::Hex(0xFF8A7A), Enemy.HitFlash / 0.12f);
+		Tint = YJJUI::SlowTint;
 	}
 
 	FVector2f Scale(1.f, 1.f);
 	if (Enemy.HitFlash > 0.f)
 	{
-		const float T = Enemy.HitFlash / 0.12f;
-		Scale = FVector2f(1.f + 0.12f * T, 1.f - 0.1f * T);
+		const float T = Enemy.HitFlash / YJJData::Tune().HitFlashTime;
+		Tint = FMath::Lerp(Tint, YJJUI::HitTint, T);
+		Scale = FVector2f(1.f + UI().EnemyHitStretchX * T, 1.f - UI().EnemyHitSquashY * T);
 	}
 	if (Enemy.StunTime > 0.f && Enemy.FreezeTime <= 0.f)
 	{
-		Feet.X += FMath::Sin(UITime * 40.f) * 2.f;
+		Feet.X += FMath::Sin(UITime * UI().StunShakeSpeed) * UI().StunShake;
 	}
 
 	if (Enemy.VulnTime > 0.f)
 	{
-		DrawSprite(RingTexture, Enemy.Pos, FVector2f(Size.X * 1.1f, Size.X * 0.42f), YJJUI::WithAlpha(YJJUI::Purple, 0.9f));
+		DrawSprite(RingTexture, Enemy.Pos, FVector2f(Size.X * UI().VulnRingW, Size.X * UI().VulnRingH), YJJUI::WithAlpha(YJJUI::Purple, UI().VulnRingAlpha));
 	}
 
-	DrawSpriteFeet(Texture, Feet, Scale, Tint, Enemy.Dir.X < -0.05f);
+	DrawSpriteFeet(Texture, Feet, Scale, Tint, Enemy.Dir.X < -UI().FacingDeadZone);
+	DrawEnemyStatus(Enemy, Feet, Size);
+}
 
+void AYJJDefenseHUD::DrawEnemyStatus(const FYJJEnemyState& Enemy, const FVector2f& Feet, const FVector2f& Size)
+{
+	const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
 	const float HeadY = Feet.Y - Size.Y;
+
 	if (Enemy.FreezeTime > 0.f)
 	{
-		DrawSprite(IceTexture, FVector2f(Feet.X, Feet.Y - Size.Y * 0.5f), FVector2f(Size.X * 1.1f, Size.Y * 1.1f));
+		DrawSprite(IceTexture, FVector2f(Feet.X, Feet.Y - Size.Y * 0.5f), Size * UI().IceScale);
 	}
 	if (Enemy.BurnTime > 0.f)
 	{
-		const float Flicker = 1.f + 0.15f * FMath::Sin(UITime * 22.f + Enemy.Id);
-		DrawSprite(FlameTexture, FVector2f(Feet.X - Size.X * 0.2f, HeadY + 6.f), FVector2f(22.f, 26.f) * Flicker, YJJUI::Orange);
-		DrawSprite(FlameTexture, FVector2f(Feet.X + Size.X * 0.22f, HeadY + 14.f), FVector2f(18.f, 21.f) * (2.f - Flicker), YJJUI::Yellow);
+		const float Flicker = 1.f + UI().FlameFlicker * FMath::Sin(UITime * UI().FlameFlickerSpeed + Enemy.Id);
+		DrawSprite(FlameTexture, FVector2f(Feet.X - Size.X * UI().Flame1X, HeadY + UI().Flame1Down), FVector2f(UI().Flame1W, UI().Flame1H) * Flicker, YJJUI::Orange);
+		DrawSprite(FlameTexture, FVector2f(Feet.X + Size.X * UI().Flame2X, HeadY + UI().Flame2Down), FVector2f(UI().Flame2W, UI().Flame2H) * (2.f - Flicker), YJJUI::Yellow);
 	}
 	if (Enemy.StunTime > 0.f && Enemy.FreezeTime <= 0.f)
 	{
 		// 머리 위를 도는 별
-		for (int32 Index = 0; Index < 3; ++Index)
+		const int32 Stars = FMath::RoundToInt(UI().StunStars);
+		const float StarSize = UI().StunStarSize;
+		for (int32 Index = 0; Index < Stars; ++Index)
 		{
-			const float Angle = UITime * 7.f + Index * UE_TWO_PI / 3.f;
-			DrawSprite(StarFxTexture, FVector2f(Feet.X + FMath::Cos(Angle) * Size.X * 0.36f, HeadY + FMath::Sin(Angle) * 6.f), FVector2f(18.f, 18.f), YJJUI::Yellow, Angle * 60.f);
+			const float Angle = UITime * UI().StunStarSpin + Index * UE_TWO_PI / Stars;
+			DrawSprite(StarFxTexture, FVector2f(Feet.X + FMath::Cos(Angle) * Size.X * UI().StunStarOrbit, HeadY + FMath::Sin(Angle) * UI().StunStarBob),
+				FVector2f(StarSize, StarSize), YJJUI::Yellow, FMath::RadiansToDegrees(Angle));
 		}
 	}
 
 	// 묻어 있는 원소
-	float BarY = HeadY - 8.f;
+	float BarY = HeadY - UI().EnemyBarUp;
 	if (Enemy.Aura != EYJJElement::None)
 	{
-		const float Blink = Enemy.AuraTime < 1.5f ? 0.55f + 0.45f * FMath::Sin(UITime * 16.f) : 1.f;
-		DrawSprite(RuneTex(YJJData::ElementRune(Enemy.Aura)), FVector2f(Feet.X, HeadY - 20.f), FVector2f(30.f, 30.f), YJJUI::WithAlpha(FLinearColor::White, Blink));
-		BarY = HeadY - 42.f;
+		const float Blink = Enemy.AuraTime < UI().AuraBlinkTime ? UI().AuraBlinkBase + UI().AuraBlinkAmount * FMath::Sin(UITime * UI().AuraBlinkSpeed) : 1.f;
+		const float Icon = UI().AuraIconSize;
+		DrawSprite(RuneTex(YJJData::ElementRune(Enemy.Aura)), FVector2f(Feet.X, HeadY - UI().AuraIconUp), FVector2f(Icon, Icon), YJJUI::WithAlpha(FLinearColor::White, Blink));
+		BarY = HeadY - UI().EnemyBarUpWithAura;
 	}
 
 	if (Enemy.HP < Enemy.MaxHP)
 	{
-		DrawBar(FVector2f(Feet.X, BarY), Def.bBoss ? 120.f : FMath::Max(Size.X * 0.7f, 34.f), Enemy.HP / Enemy.MaxHP, Def.bBoss ? YJJUI::Orange : YJJUI::Red);
+		const float Width = Def.bBoss ? UI().BossBarWidth : FMath::Max(Size.X * UI().EnemyBarShare, UI().EnemyBarMinWidth);
+		DrawBar(FVector2f(Feet.X, BarY), Width, Enemy.HP / Enemy.MaxHP, Def.bBoss ? YJJUI::Orange : YJJUI::Red);
 	}
 }
 
 void AYJJDefenseHUD::DrawSoldier(const FYJJSoldierState& Soldier)
 {
-	const int32 Frame = Soldier.AttackAnim > 0.f ? 2 : (Soldier.bMoving ? (FMath::FloorToInt(Soldier.AnimTime * 8.f) & 1) : 0);
+	constexpr int32 WalkFrames = 2;
+	const int32 Frame = Soldier.AttackAnim > 0.f ? SoldierAttackFrame : (Soldier.bMoving ? (FMath::FloorToInt(Soldier.AnimTime * UI().SoldierWalkFrameRate) % WalkFrames) : 0);
 	UTexture2D* Texture = SoldierTextures[Frame];
-	const FVector2f Size = TexSize(Texture) * 0.5f;
-	const FVector2f Feet = Soldier.Pos + FVector2f(0.f, 6.f);
+	const FVector2f Size = TexSize(Texture) * UI().SpriteScale;
+	const FVector2f Feet = Soldier.Pos + FVector2f(0.f, UI().UnitFeetDown);
 
-	DrawSprite(ShadowTexture, Soldier.Pos + FVector2f(0.f, 2.f), FVector2f(40.f, 12.f));
-	const FLinearColor Tint = Soldier.HitFlash > 0.f ? YJJUI::Hex(0xFF8A7A) : FLinearColor::White;
+	DrawSprite(ShadowTexture, Soldier.Pos + FVector2f(0.f, UI().UnitShadowDown), FVector2f(UI().SoldierShadowW, UI().SoldierShadowH));
+	const FLinearColor Tint = Soldier.HitFlash > 0.f ? YJJUI::HitTint : FLinearColor::White;
 	DrawSpriteFeet(Texture, Feet, FVector2f(1.f, 1.f), Tint, Soldier.bFacingLeft);
 
 	if (Soldier.HP < Soldier.MaxHP)
 	{
-		DrawBar(FVector2f(Feet.X, Feet.Y - Size.Y - 6.f), 34.f, Soldier.HP / Soldier.MaxHP, YJJUI::Green);
+		DrawBar(FVector2f(Feet.X, Feet.Y - Size.Y - UI().SoldierBarUp), UI().SoldierBarWidth, Soldier.HP / Soldier.MaxHP, YJJUI::Green);
 	}
 }
 
 void AYJJDefenseHUD::DrawWizard()
 {
 	const FYJJDefenseSim& Sim = Game->GetSim();
-	const FVector2f Feet = YJJMap::WizardPos() + FVector2f(0.f, 8.f);
-	DrawSprite(ShadowTexture, Feet + FVector2f(0.f, -6.f), FVector2f(96.f, 28.f));
+	const FVector2f Feet = YJJMap::WizardPos() + FVector2f(0.f, UI().WizardFeetDown);
+	DrawSprite(ShadowTexture, Feet - FVector2f(0.f, UI().WizardShadowUp), FVector2f(UI().WizardShadowW, UI().WizardShadowH));
 	DrawSpriteFeet(WizardTextures[Sim.WizardCastAnim > 0.f ? 1 : 0], Feet);
 
 	// 마력 레벨만큼 별
+	const float Star = UI().WizardStarSize;
 	for (int32 Index = 0; Index < Sim.WizardLevel; ++Index)
 	{
-		DrawSprite(StarIcon, Feet + FVector2f((Index - (Sim.WizardLevel - 1) * 0.5f) * 22.f, -172.f), FVector2f(22.f, 22.f));
+		DrawSprite(StarIcon, Feet + FVector2f((Index - (Sim.WizardLevel - 1) * 0.5f) * Star, -UI().WizardStarUp), FVector2f(Star, Star));
+	}
+}
+
+void AYJJDefenseHUD::DrawSpellBall(const FYJJProjectileState& Projectile, const FVector2f& Pos, const FVector2f& Velocity, float DeltaSeconds)
+{
+	const FLinearColor Color = YJJData::ElementColor(Projectile.Element);
+	const bool bBig = Projectile.Spell.bAmplified || Projectile.Spell.Explode > 1;
+	const float Size = (bBig ? UI().SpellBallBigSize : UI().SpellBallSize) * (1.f + UI().SpellBallPulse * FMath::Sin(UITime * UI().SpellBallPulseSpeed));
+	DrawSprite(DiscTexture, Pos, FVector2f(Size, Size) * UI().SpellBallGlow, YJJUI::WithAlpha(Color, UI().SpellBallGlowAlpha));
+	DrawSprite(BallTex(Projectile.Element), Pos, FVector2f(Size, Size));
+
+	// 두 번째 원소는 작은 구슬로 주위를 돈다
+	const bool bTwoElements = Projectile.Spell.NumElements > 1;
+	if (bTwoElements)
+	{
+		const float Orbit = UITime * UI().SpellBallOrbitSpeed;
+		const FVector2f Offset(FMath::Cos(Orbit) * Size * UI().SpellBallOrbitX, FMath::Sin(Orbit) * Size * UI().SpellBallOrbitY);
+		DrawSprite(BallTex(Projectile.Element2), Pos + Offset, FVector2f(Size, Size) * UI().SpellBallMoonScale);
+	}
+
+	// 꼬리
+	if (DeltaSeconds > 0.f && FxRandom.FRand() < UI().SpellTrailChance)
+	{
+		const float Jitter = UI().SpellTrailJitter;
+		const FLinearColor TrailColor = bTwoElements && FxRandom.FRand() < 0.5f ? YJJData::ElementColor(Projectile.Element2) : Color;
+		FFx& Spark = AddFx(EFx::Spark, Pos + FVector2f(FxRandom.FRandRange(-Jitter, Jitter), FxRandom.FRandRange(-Jitter, Jitter)), UI().SpellTrailLife, UI().SpellTrailSize, TrailColor);
+		Spark.Vel = -Velocity * UI().SpellTrailBackSpeed;
 	}
 }
 
@@ -334,49 +444,37 @@ void AYJJDefenseHUD::DrawProjectiles(float DeltaSeconds)
 	{
 		const FVector2f Velocity = Projectile.Pos - Projectile.PrevPos;
 		const float Angle = Velocity.IsNearlyZero() ? 0.f : FMath::RadiansToDegrees(FMath::Atan2(Velocity.Y, Velocity.X));
-		const FVector2f Pos = Projectile.Pos + FVector2f(0.f, -16.f);
+		const FVector2f Pos = Projectile.Pos - FVector2f(0.f, UI().ProjectileLift);
 
 		switch (Projectile.Kind)
 		{
 		case EYJJProjectile::Arrow:
-			DrawSprite(ArrowTexture, Pos, FVector2f(34.f, 11.f), FLinearColor::White, Angle);
+			DrawSprite(ArrowTexture, Pos, FVector2f(UI().ArrowW, UI().ArrowH), FLinearColor::White, Angle);
 			break;
 		case EYJJProjectile::Bomb:
-			DrawSprite(BombTexture, Pos, FVector2f(30.f, 32.f), FLinearColor::White, Projectile.Time * 300.f);
+			DrawSprite(BombTexture, Pos, FVector2f(UI().BombW, UI().BombH), FLinearColor::White, Projectile.Time * UI().BombSpin);
 			break;
 		case EYJJProjectile::MagicBolt:
-			DrawSprite(DiscTexture, Pos, FVector2f(44.f, 44.f), YJJUI::WithAlpha(YJJUI::Purple, 0.5f));
-			DrawSprite(BoltTexture, Pos, FVector2f(30.f, 30.f), FLinearColor::White, Projectile.Time * 500.f);
-			break;
-		case EYJJProjectile::ShrineOrb:
-			DrawSprite(DiscTexture, Pos, FVector2f(40.f, 40.f), YJJUI::WithAlpha(YJJData::ElementColor(Projectile.Element), 0.5f));
-			DrawSprite(BallTex(Projectile.Element), Pos, FVector2f(26.f, 26.f));
-			break;
-		case EYJJProjectile::SpellBall:
 		{
-			const FLinearColor Color = YJJData::ElementColor(Projectile.Element);
-			const bool bBig = Projectile.Spell.bAmplified || Projectile.Spell.Explode > 1;
-			const float Size = (bBig ? 68.f : 50.f) * (1.f + 0.06f * FMath::Sin(UITime * 20.f));
-			DrawSprite(DiscTexture, Pos, FVector2f(Size, Size) * 1.6f, YJJUI::WithAlpha(Color, 0.5f));
-			DrawSprite(BallTex(Projectile.Element), Pos, FVector2f(Size, Size));
-
-			// 두 번째 원소는 작은 구슬로 주위를 돈다
-			if (Projectile.Spell.NumElements > 1)
-			{
-				const float Orbit = UITime * 14.f;
-				const FVector2f Offset(FMath::Cos(Orbit) * Size * 0.55f, FMath::Sin(Orbit) * Size * 0.3f);
-				DrawSprite(BallTex(Projectile.Element2), Pos + Offset, FVector2f(Size, Size) * 0.6f);
-			}
-
-			// 꼬리
-			if (DeltaSeconds > 0.f && FxRandom.FRand() < 0.6f)
-			{
-				FFx& Spark = AddFx(EFx::Spark, Pos + FVector2f(FxRandom.FRandRange(-8.f, 8.f), FxRandom.FRandRange(-8.f, 8.f)), 0.3f, 16.f,
-					Projectile.Spell.NumElements > 1 && FxRandom.FRand() < 0.5f ? YJJData::ElementColor(Projectile.Element2) : Color);
-				Spark.Vel = -Velocity * 8.f;
-			}
+			const float Glow = UI().MagicBoltGlow;
+			const float Bolt = UI().MagicBoltSize;
+			DrawSprite(DiscTexture, Pos, FVector2f(Glow, Glow), YJJUI::WithAlpha(YJJUI::Purple, UI().ProjectileGlowAlpha));
+			DrawSprite(BoltTexture, Pos, FVector2f(Bolt, Bolt), FLinearColor::White, Projectile.Time * UI().MagicBoltSpin);
 			break;
 		}
+		case EYJJProjectile::ShrineOrb:
+		{
+			const float Glow = UI().ShrineShotGlow;
+			const float Ball = UI().ShrineShotSize;
+			DrawSprite(DiscTexture, Pos, FVector2f(Glow, Glow), YJJUI::WithAlpha(YJJData::ElementColor(Projectile.Element), UI().ProjectileGlowAlpha));
+			DrawSprite(BallTex(Projectile.Element), Pos, FVector2f(Ball, Ball));
+			break;
+		}
+		case EYJJProjectile::SpellBall:
+			DrawSpellBall(Projectile, Pos, Velocity, DeltaSeconds);
+			break;
+		default:
+			break;
 		}
 	}
 }
@@ -387,37 +485,48 @@ void AYJJDefenseHUD::DrawProjectiles(float DeltaSeconds)
 void AYJJDefenseHUD::DrawTopBar()
 {
 	const FYJJDefenseSim& Sim = Game->GetSim();
-	const float Y = 16.f;
-	const float H = 58.f;
+	const float Y = UI().TopBarY;
+	const float H = UI().TopBarH;
+	const float IconY = Y + H * 0.5f - UI().TopIconUp;
+	const float TextY = Y + H * 0.5f - UI().TopTextUp;
+	const float Icon = UI().TopIconSize;
 
-	DrawPanel(20.f, Y, 138.f, H, FLinearColor::White);
-	DrawSprite(HeartIcon, FVector2f(54.f, Y + H * 0.5f - 2.f), FVector2f(38.f, 38.f));
-	DrawLabel(FString::FromInt(Sim.Lives), 82.f, Y + H * 0.5f - 3.f, 34.f, Sim.Lives <= 5 ? YJJUI::Red : YJJUI::Ink);
+	DrawPanel(UI().LivesX, Y, UI().LivesW, H, FLinearColor::White);
+	DrawSprite(HeartIcon, FVector2f(UI().LivesIconX, IconY), FVector2f(Icon, Icon));
+	DrawLabel(FString::FromInt(Sim.Lives), UI().LivesTextX, TextY, UI().TopNumberSize, Sim.Lives <= FMath::RoundToInt(UI().LivesWarnAt) ? YJJUI::Red : YJJUI::Ink);
 
-	DrawPanel(168.f, Y, 162.f, H, FLinearColor::White);
-	DrawSprite(CoinIcon, FVector2f(202.f, Y + H * 0.5f - 2.f), FVector2f(38.f, 38.f));
-	DrawLabel(FString::FromInt(Sim.Gold), 230.f, Y + H * 0.5f - 3.f, 34.f, YJJUI::Ink);
+	DrawPanel(UI().GoldX, Y, UI().GoldW, H, FLinearColor::White);
+	DrawSprite(CoinIcon, FVector2f(UI().GoldIconX, IconY), FVector2f(Icon, Icon));
+	DrawLabel(FString::FromInt(Sim.Gold), UI().GoldTextX, TextY, UI().TopNumberSize, YJJUI::Ink);
 
-	DrawPanel(340.f, Y, 236.f, H, FLinearColor::White);
-	DrawSprite(FlagIcon, FVector2f(374.f, Y + H * 0.5f - 2.f), FVector2f(38.f, 38.f));
-	DrawLabel(FString::Printf(TEXT("웨이브 %d/%d"), FMath::Max(Sim.WaveIndex + 1, 0), YJJData::NumWaves()), 400.f, Y + H * 0.5f - 3.f, 30.f, YJJUI::Ink);
+	DrawPanel(UI().WaveInfoX, Y, UI().WaveInfoW, H, FLinearColor::White);
+	DrawSprite(FlagIcon, FVector2f(UI().WaveIconX, IconY), FVector2f(Icon, Icon));
+	DrawLabel(YJJLoc::Format(TEXT("Top.Wave"), { FMath::Max(Sim.WaveIndex + 1, 0), YJJData::NumWaves() }), UI().WaveTextX, TextY, UI().TopWaveSize, YJJUI::Ink);
 
-	DrawPanel(586.f, Y, 250.f, H, YJJUI::Yellow);
-	DrawLabel(FString::Printf(TEXT("%s · %d단계"), YJJMap::Name(Sim.Config.Map), Sim.Config.Tier), 711.f, Y + H * 0.5f - 3.f, 26.f, YJJUI::Ink, EAlign::Center);
+	const float MapX = UI().MapInfoX;
+	const float MapW = UI().MapInfoW;
+	DrawPanel(MapX, Y, MapW, H, YJJUI::Yellow);
+	DrawLabel(YJJLoc::Format(TEXT("Top.MapTier"), { YJJMap::Name(Sim.Config.Map), Sim.Config.Tier }), MapX + MapW * 0.5f, TextY, UI().TopMapSize, YJJUI::Ink, EAlign::Center, 0.f, MapW - UI().TextFitPad);
 
 	// 오른쪽: 일시정지, 배속
-	const bool bPauseHover = DrawButton(1774.f, Y, 60.f, H, YJJUI::Sky, EAction::Pause);
-	DrawSprite(Game->IsBattlePaused() ? PlayIcon : PauseIcon, FVector2f(1804.f, Y + H * 0.5f - 2.f - (bPauseHover ? 2.f : 0.f)), FVector2f(32.f, 32.f));
-	const bool bFast = Game->GetSpeed() > 1.5f;
-	const bool bSpeedHover = DrawButton(1842.f, Y, 60.f, H, bFast ? YJJUI::Orange : YJJUI::Sky, EAction::Speed);
-	DrawSprite(bFast ? FastIcon : PlayIcon, FVector2f(1872.f, Y + H * 0.5f - 2.f - (bSpeedHover ? 2.f : 0.f)), FVector2f(32.f, 32.f));
+	const float ButtonW = UI().TopButtonW;
+	const float Button = UI().TopButtonIcon;
+	const float Lift = UI().ButtonHoverLift;
+	const float PauseX = UI().PauseButtonX;
+	const bool bPauseHover = DrawButton(PauseX, Y, ButtonW, H, YJJUI::Sky, EAction::Pause);
+	DrawSprite(Game->IsBattlePaused() ? PlayIcon : PauseIcon, FVector2f(PauseX + ButtonW * 0.5f, IconY - (bPauseHover ? Lift : 0.f)), FVector2f(Button, Button));
+	const bool bFast = Game->IsFast();
+	const float SpeedX = UI().SpeedButtonX;
+	const bool bSpeedHover = DrawButton(SpeedX, Y, ButtonW, H, bFast ? YJJUI::Orange : YJJUI::Sky, EAction::Speed);
+	DrawSprite(bFast ? FastIcon : PlayIcon, FVector2f(SpeedX + ButtonW * 0.5f, IconY - (bSpeedHover ? Lift : 0.f)), FVector2f(Button, Button));
 	if (bPauseHover)
 	{
-		SetTooltip(TEXT("잠깐 멈춤 (P)"), TEXT("멈춘 동안에도 룬은 바꿔 끼울 수 있다"), YJJUI::Ink);
+		SetTooltip(YJJLoc::Get(TEXT("Tip.Pause.Title")), YJJLoc::Get(TEXT("Tip.Pause.Body")), YJJUI::Ink);
 	}
 	if (bSpeedHover)
 	{
-		SetTooltip(TEXT("배속 (F)"), bFast ? TEXT("지금 2배속") : TEXT("지금 1배속"), YJJUI::Ink);
+		SetTooltip(YJJLoc::Get(TEXT("Tip.Speed.Title")),
+			YJJLoc::Format(TEXT("Tip.Speed.Body"), { Whole(Game->GetSpeed()) }), YJJUI::Ink);
 	}
 }
 
@@ -426,32 +535,34 @@ FString AYJJDefenseHUD::DescribeSpell(const FYJJSpellSpec& Spell, bool& bOutNew)
 	bOutNew = false;
 	if (!Spell.IsValid())
 	{
-		return TEXT("비어 있다. 룬을 끌어다 꽂자");
+		return YJJLoc::Get(TEXT("Spell.Empty"));
 	}
 
 	const FYJJDefenseSim& Sim = Game->GetSim();
+	const FYJJTuning& Tune = YJJData::Tune();
 	bOutNew = Spell.ComboId != INDEX_NONE && !Game->IsComboKnown(Spell.ComboId);
 
 	FString Body = Spell.Description;
-	Body += FString::Printf(TEXT("\n피해 %.0f · 범위 %.0f · 재사용 %.1f초"),
-		Spell.Damage * YJJData::WizardDamageScale[Sim.WizardLevel], Spell.Radius, Spell.Cooldown * YJJData::WizardCooldownScale[Sim.WizardLevel]);
+	Body += TEXT("\n");
+	Body += YJJLoc::Format(TEXT("Spell.Stats"), { Whole(Spell.Damage * Tune.WizardDamage(Sim.WizardLevel)), Whole(Spell.Radius), OneDecimal(Spell.Cooldown * Tune.WizardCooldown(Sim.WizardLevel)) });
 	if (bOutNew)
 	{
-		Body += TEXT("\n★ 아직 안 써 본 조합! 쓰면 도감에 오른다");
+		Body += TEXT("\n");
+		Body += YJJLoc::Get(TEXT("Spell.NewCombo"));
 	}
 	return Body;
 }
 
-void AYJJDefenseHUD::DrawSpellBar()
+void AYJJDefenseHUD::DrawRuneBag()
 {
-	FYJJDefenseSim& Sim = Game->GetSim();
-	using namespace YJJUI;
+	const FYJJDefenseSim& Sim = Game->GetSim();
+	const float BarY = UI().BarY;
+	const float BarH = UI().BarH;
+	const float BagX = UI().BagX;
+	const float BagIcon = UI().BagIcon;
+	const float TextX = BagX + UI().BagTextIndent;
 
-	DrawPanel(BarX, BarY, BarW, BarH, YJJUI::WithAlpha(Cream, 0.96f));
-	AddHit(BarX, BarY, BarW, BarH, EAction::Blocker);
-
-	// --- 룬 가방 ---
-	DrawLabel(TEXT("룬 가방"), BagX + 2.f, BarY + 27.f, 25.f, DarkGray);
+	DrawLabel(YJJLoc::Get(TEXT("Bag.Title")), TextX, BarY + UI().BagTitleDown, UI().BagTitleSize, YJJUI::DarkGray);
 	int32 BagIndex = 0;
 	for (int32 Index = 0; Index < static_cast<int32>(EYJJRune::Count); ++Index)
 	{
@@ -461,123 +572,169 @@ void AYJJDefenseHUD::DrawSpellBar()
 			continue;
 		}
 
-		const float X = BagX + BagSpacing * (BagIndex % 5);
-		const float Y = BagY - 28.f + (BagIndex / 5) * BagSpacing;
-		BagIndex++;
-
+		const FVector2f Center = BagRuneCenter(BagIndex++);
+		const float X = Center.X - BagIcon * 0.5f;
+		const float Y = Center.Y - BagIcon * 0.5f;
 		const bool bHover = IsHover(X, Y, BagIcon, BagIcon);
 		const bool bPicked = SelectedRune == Rune;
-		const float Grow = (bHover || bPicked) ? 6.f : 0.f;
+		const float Grow = (bHover || bPicked) ? UI().BagHoverGrow : 0.f;
 		if (bPicked)
 		{
-			DrawPanel(X - 6.f, Y - 6.f, BagIcon + 12.f, BagIcon + 12.f, Yellow, false);
+			const float Pad = UI().BagPickedPad;
+			DrawPanel(X - Pad, Y - Pad, BagIcon + Pad * 2.f, BagIcon + Pad * 2.f, YJJUI::Yellow, false);
 		}
-		DrawSprite(RuneTex(Rune), FVector2f(X + BagIcon * 0.5f, Y + BagIcon * 0.5f - (bPicked ? 3.f : 0.f)), FVector2f(BagIcon + Grow, BagIcon + Grow));
+		DrawSprite(RuneTex(Rune), Center - FVector2f(0.f, bPicked ? UI().BagPickedLift : 0.f), FVector2f(BagIcon + Grow, BagIcon + Grow));
 		AddHit(X, Y, BagIcon, BagIcon, EAction::BagRune, Index);
 
 		if (bHover && DragRune == EYJJRune::None)
 		{
 			const FYJJRuneDef& Def = YJJData::Rune(Rune);
-			SetTooltip(FString::Printf(TEXT("%s 룬 · %s"), Def.Name, Def.SpellName), FString(Def.Desc) + TEXT("\n끌어다 디스크 칸에 놓으면 조합된다"), Ink);
+			SetTooltip(YJJLoc::Format(TEXT("Tip.BagRune.Title"), { YJJLoc::Get(Def.NameKey), YJJLoc::Get(Def.SpellKey) }),
+				YJJLoc::Get(Def.DescKey) + TEXT("\n") + YJJLoc::Get(TEXT("Tip.BagRune.Body")), YJJUI::Ink);
 		}
 	}
-	DrawLabel(SelectedRune != EYJJRune::None ? TEXT("꽂을 칸을 누르세요") : TEXT("끌어서 디스크에 꽂기"), BagX + 2.f, BarY + BarH - 24.f, 20.f, SelectedRune != EYJJRune::None ? Orange : DarkGray);
 
-	// --- 스펠 디스크 ---
-	for (int32 Disk = 0; Disk < YJJ::NumDisks; ++Disk)
+	const bool bPicking = SelectedRune != EYJJRune::None;
+	DrawLabel(bPicking ? YJJLoc::Get(TEXT("Bag.PickSocket")) : YJJLoc::Get(TEXT("Bag.Hint")),
+		TextX, BarY + BarH - UI().BagHintUp, UI().BagHintSize, bPicking ? YJJUI::Orange : YJJUI::DarkGray);
+}
+
+void AYJJDefenseHUD::DrawDisk(int32 Disk)
+{
+	const FYJJDefenseSim& Sim = Game->GetSim();
+	const FYJJDiskState& State = Sim.Disks[Disk];
+	const FVector2f Center = DiskCenter(Disk);
+	const float DiskSize = UI().DiskSize;
+	const float SocketSize = UI().SocketSize;
+	const float Half = DiskSize * 0.5f;
+	const bool bReady = Sim.CanCast(Disk);
+	const bool bHover = IsHover(Center.X - Half, Center.Y - Half, DiskSize, DiskSize);
+	const FLinearColor ElementColor = State.Spell.IsValid() ? YJJData::ElementColor(State.Spell.Elements[0]) : YJJUI::Gray;
+	const FString SpellName = State.Spell.IsValid() ? State.Spell.Name : YJJLoc::Get(TEXT("Disk.Empty"));
+
+	if (ArmedDisk == Disk)
 	{
-		const FYJJDiskState& State = Sim.Disks[Disk];
-		const FVector2f Center(DiskFirstX + DiskSpacing * Disk, DiskY);
-		const float Half = DiskSize * 0.5f;
-		const bool bReady = Sim.CanCast(Disk);
-		const bool bArmed = ArmedDisk == Disk;
-		const bool bHover = IsHover(Center.X - Half, Center.Y - Half, DiskSize, DiskSize);
-		const FLinearColor ElementColor = State.Spell.IsValid() ? YJJData::ElementColor(State.Spell.Elements[0]) : Gray;
-
-		if (bArmed)
-		{
-			const float Pulse = 1.12f + 0.05f * FMath::Sin(UITime * 10.f);
-			DrawSprite(DiscTexture, Center, FVector2f(DiskSize, DiskSize) * Pulse * 1.15f, Yellow);
-		}
-		else if (bReady)
-		{
-			DrawSprite(DiscTexture, Center, FVector2f(DiskSize, DiskSize) * 1.2f, YJJUI::WithAlpha(ElementColor, 0.75f));
-		}
-
-		// 준비되면 원반이 천천히 돈다
-		const float Spin = bReady ? UITime * 30.f + Disk * 40.f : 0.f;
-		const float Lift = (bHover && bReady) ? 3.f : 0.f;
-		DrawSprite(DiskTexture, Center - FVector2f(0.f, Lift), FVector2f(DiskSize, DiskSize), bReady ? FLinearColor::White : Hex(0xC9C6D4), Spin);
-		AddHit(Center.X - Half, Center.Y - Half, DiskSize, DiskSize, EAction::Disk, Disk);
-
-		for (int32 Socket = 0; Socket < YJJ::NumSockets; ++Socket)
-		{
-			const FVector2f SocketCenter = Center + FVector2f((Socket == 0 ? -1.f : 1.f) * (SocketSize * 0.5f + 3.f), -Lift);
-			const float X = SocketCenter.X - SocketSize * 0.5f;
-			const float Y = SocketCenter.Y - SocketSize * 0.5f;
-			const EYJJRune Rune = State.Sockets[Socket];
-			const bool bSocketHover = IsHover(X, Y, SocketSize, SocketSize);
-			const bool bCanDrop = (SelectedRune != EYJJRune::None || DragRune != EYJJRune::None);
-
-			if (bCanDrop)
-			{
-				const float Pulse = bSocketHover ? 1.3f : 1.12f + 0.06f * FMath::Sin(UITime * 9.f);
-				DrawPanel(SocketCenter.X - SocketSize * 0.5f * Pulse, SocketCenter.Y - SocketSize * 0.5f * Pulse, SocketSize * Pulse, SocketSize * Pulse, Yellow, false);
-			}
-			DrawSprite(Rune == EYJJRune::None ? SocketTexture : RuneTex(Rune), SocketCenter, FVector2f(SocketSize, SocketSize), bReady ? FLinearColor::White : Hex(0xD8D5E0));
-			AddHit(X, Y, SocketSize, SocketSize, EAction::Socket, Disk, Socket);
-		}
-
-		if (State.Cooldown > 0.f)
-		{
-			DrawSprite(DiscTexture, Center, FVector2f(DiskSize, DiskSize) * 1.02f, YJJUI::WithAlpha(Ink, 0.5f));
-			DrawLabel(FString::Printf(TEXT("%.1f"), State.Cooldown), Center.X, Center.Y - 2.f, 40.f, FLinearColor::White, EAlign::Center, 5.f);
-		}
-
-		// 단축키 딱지, 스펠 이름
-		DrawPanel(Center.X - Half - 4.f, Center.Y - Half - 6.f, 34.f, 34.f, bReady ? Yellow : Gray);
-		DrawLabel(FString::FromInt(Disk + 1), Center.X - Half + 13.f, Center.Y - Half + 9.f, 22.f, Ink, EAlign::Center);
-		DrawLabel(State.Spell.IsValid() ? State.Spell.Name : FString(TEXT("빈 디스크")), Center.X + 12.f, BarY + 22.f, 24.f, Ink, EAlign::Center);
-
-		if (bHover && DragRune == EYJJRune::None)
-		{
-			bool bNew = false;
-			const FString Body = DescribeSpell(State.Spell, bNew);
-			SetTooltip(State.Spell.IsValid() ? State.Spell.Name : FString(TEXT("빈 디스크")), Body + TEXT("\n좌클릭: 조준 · 칸 우클릭: 룬 빼기"), bNew ? Orange : Ink);
-		}
+		const float Pulse = UI().DiskArmedGlow + UI().DiskArmedPulse * FMath::Sin(UITime * UI().DiskArmedPulseSpeed);
+		DrawSprite(DiscTexture, Center, FVector2f(DiskSize, DiskSize) * Pulse * UI().DiskArmedScale, YJJUI::Yellow);
+	}
+	else if (bReady)
+	{
+		DrawSprite(DiscTexture, Center, FVector2f(DiskSize, DiskSize) * UI().DiskReadyGlow, YJJUI::WithAlpha(ElementColor, UI().DiskReadyGlowAlpha));
 	}
 
-	// --- 마력 강화 ---
-	const float WX = BarX + BarW - 178.f;
-	const float WY = BarY + 34.f;
+	// 준비되면 원반이 천천히 돈다
+	const float Spin = bReady ? UITime * UI().DiskSpinSpeed + Disk * UI().DiskSpinPhase : 0.f;
+	const float Lift = (bHover && bReady) ? UI().DiskHoverLift : 0.f;
+	DrawSprite(DiskTexture, Center - FVector2f(0.f, Lift), FVector2f(DiskSize, DiskSize), bReady ? FLinearColor::White : YJJUI::DiskCooling, Spin);
+	AddHit(Center.X - Half, Center.Y - Half, DiskSize, DiskSize, EAction::Disk, Disk);
+
+	const bool bCanDrop = SelectedRune != EYJJRune::None || DragRune != EYJJRune::None;
+	for (int32 Socket = 0; Socket < YJJ::NumSockets; ++Socket)
+	{
+		const FVector2f Slot = SocketCenter(Disk, Socket) - FVector2f(0.f, Lift);
+		const float X = Slot.X - SocketSize * 0.5f;
+		const float Y = Slot.Y - SocketSize * 0.5f;
+		const EYJJRune Rune = State.Sockets[Socket];
+
+		if (bCanDrop)
+		{
+			const float Pulse = IsHover(X, Y, SocketSize, SocketSize) ? UI().SocketDropHover
+				: UI().SocketDropGlow + UI().SocketDropPulse * FMath::Sin(UITime * UI().SocketDropPulseSpeed);
+			const float Glow = SocketSize * Pulse;
+			DrawPanel(Slot.X - Glow * 0.5f, Slot.Y - Glow * 0.5f, Glow, Glow, YJJUI::Yellow, false);
+		}
+		DrawSprite(Rune == EYJJRune::None ? SocketTexture : RuneTex(Rune), Slot, FVector2f(SocketSize, SocketSize), bReady ? FLinearColor::White : YJJUI::SocketCooling);
+		AddHit(X, Y, SocketSize, SocketSize, EAction::Socket, Disk, Socket);
+	}
+
+	if (State.Cooldown > 0.f)
+	{
+		DrawSprite(DiscTexture, Center, FVector2f(DiskSize, DiskSize) * UI().DiskCooldownCover, YJJUI::WithAlpha(YJJUI::Ink, UI().DiskCooldownAlpha));
+		DrawLabel(OneDecimal(State.Cooldown), Center.X, Center.Y - UI().DiskCooldownTextUp, UI().DiskCooldownSize, FLinearColor::White, EAlign::Center, UI().DiskCooldownOutline);
+	}
+
+	// 단축키 딱지, 스펠 이름
+	const float Key = UI().DiskKeySize;
+	const float KeyX = Center.X - Half - UI().DiskKeyOutX;
+	const float KeyY = Center.Y - Half - UI().DiskKeyOutY;
+	DrawPanel(KeyX, KeyY, Key, Key, bReady ? YJJUI::Yellow : YJJUI::Gray);
+	DrawLabel(FString::FromInt(Disk + 1), KeyX + Key * 0.5f, KeyY + Key * 0.5f - UI().DiskKeyTextUp, UI().DiskKeyTextSize, YJJUI::Ink, EAlign::Center);
+	DrawLabel(SpellName, Center.X + UI().DiskNameShift, UI().BarY + UI().DiskNameDown, UI().DiskNameSize, YJJUI::Ink, EAlign::Center, 0.f, UI().DiskNameMaxW);
+
+	if (bHover && DragRune == EYJJRune::None)
+	{
+		bool bNew = false;
+		const FString Body = DescribeSpell(State.Spell, bNew);
+		SetTooltip(SpellName, Body + TEXT("\n") + YJJLoc::Get(TEXT("Tip.Disk.Controls")), bNew ? YJJUI::Orange : YJJUI::Ink);
+	}
+}
+
+void AYJJDefenseHUD::DrawWizardUpgrade()
+{
+	const FYJJDefenseSim& Sim = Game->GetSim();
+	const FYJJTuning& Tune = YJJData::Tune();
+	const float X = UI().BarX + UI().BarW - UI().WizardButtonRight;
+	const float Y = UI().BarY + UI().WizardButtonDown;
+	const float W = UI().WizardButtonW;
+	const float H = UI().WizardButtonH;
+	const float Outline = UI().ButtonTextOutline;
 	const int32 Cost = Sim.WizardUpgradeCost();
-	const bool bCanUpgrade = Cost > 0 && Sim.Gold >= Cost;
-	const bool bWizardHover = DrawButton(WX, WY, 158.f, 112.f, Cost > 0 ? Purple : Gray, EAction::UpgradeWizard, 0, 0, bCanUpgrade || Cost == 0);
-	const float WLift = (bWizardHover && bCanUpgrade) ? 2.f : 0.f;
-	DrawSprite(WandIcon, FVector2f(WX + 36.f, WY + 40.f - WLift), FVector2f(44.f, 44.f));
-	DrawLabel(FString::Printf(TEXT("마력 Lv%d"), Sim.WizardLevel + 1), WX + 62.f, WY + 38.f - WLift, 24.f, FLinearColor::White, EAlign::Left, 4.f);
-	if (Cost > 0)
+	const bool bMaxed = Cost == 0;
+	const bool bCanUpgrade = !bMaxed && Sim.Gold >= Cost;
+
+	const bool bHover = DrawButton(X, Y, W, H, bMaxed ? YJJUI::Gray : YJJUI::Purple, EAction::UpgradeWizard, 0, 0, bCanUpgrade || bMaxed);
+	const float Lift = (bHover && bCanUpgrade) ? UI().ButtonHoverLift : 0.f;
+	const float Wand = UI().WizardWandSize;
+	const float Coin = UI().WizardCoinSize;
+	DrawSprite(WandIcon, FVector2f(X + UI().WizardWandX, Y + UI().WizardWandY - Lift), FVector2f(Wand, Wand));
+	DrawLabel(YJJLoc::Format(TEXT("Wizard.Level"), { Sim.WizardLevel + 1 }), X + UI().WizardLevelX, Y + UI().WizardLevelY - Lift, UI().WizardLevelSize, FLinearColor::White, EAlign::Left, Outline, W - UI().WizardLevelX - UI().TextFitPad);
+	if (!bMaxed)
 	{
-		DrawSprite(CoinIcon, FVector2f(WX + 54.f, WY + 82.f - WLift), FVector2f(26.f, 26.f));
-		DrawLabel(FString::FromInt(Cost), WX + 72.f, WY + 80.f - WLift, 26.f, Sim.Gold >= Cost ? FLinearColor::White : Hex(0xFFB3AB), EAlign::Left, 4.f);
+		DrawSprite(CoinIcon, FVector2f(X + UI().WizardCoinX, Y + UI().WizardCoinY - Lift), FVector2f(Coin, Coin));
+		DrawLabel(FString::FromInt(Cost), X + UI().WizardCostX, Y + UI().WizardCostY - Lift, UI().WizardCostSize, Sim.Gold >= Cost ? FLinearColor::White : YJJUI::CantAfford, EAlign::Left, Outline);
 	}
 	else
 	{
-		DrawLabel(TEXT("최고"), WX + 79.f, WY + 80.f, 26.f, FLinearColor::White, EAlign::Center, 4.f);
-	}
-	if (bWizardHover)
-	{
-		SetTooltip(TEXT("마력 강화"), Cost > 0
-			? FString::Printf(TEXT("모든 스펠 피해 x%.1f > x%.1f\n재사용 대기 %d%% 단축"), YJJData::WizardDamageScale[Sim.WizardLevel], YJJData::WizardDamageScale[Sim.WizardLevel + 1],
-				FMath::RoundToInt((1.f - YJJData::WizardCooldownScale[Sim.WizardLevel + 1]) * 100.f))
-			: FString(TEXT("더 올릴 수 없다")), Ink);
+		DrawLabel(YJJLoc::Get(TEXT("Wizard.Max")), X + W * 0.5f, Y + UI().WizardCostY, UI().WizardCostSize, FLinearColor::White, EAlign::Center, Outline);
 	}
 
-	// 끌고 있는 룬
-	if (DragRune != EYJJRune::None && FVector2f::Distance(Mouse, DragStart) > 14.f)
+	if (bHover)
 	{
-		DrawSprite(RuneTex(DragRune), Mouse, FVector2f(66.f, 66.f), YJJUI::WithAlpha(FLinearColor::White, 0.92f), FMath::Sin(UITime * 12.f) * 6.f);
+		const FString Body = bMaxed ? YJJLoc::Get(TEXT("Tip.Wizard.Maxed"))
+			: YJJLoc::Format(TEXT("Tip.Wizard.Body"), { OneDecimal(Tune.WizardDamage(Sim.WizardLevel)), OneDecimal(Tune.WizardDamage(Sim.WizardLevel + 1)), Percent(1.f - Tune.WizardCooldown(Sim.WizardLevel + 1)) });
+		SetTooltip(YJJLoc::Get(TEXT("Tip.Wizard.Title")), Body, YJJUI::Ink);
 	}
+}
+
+void AYJJDefenseHUD::DrawSpellBar()
+{
+	const float BarX = UI().BarX;
+	const float BarY = UI().BarY;
+	const float BarW = UI().BarW;
+	const float BarH = UI().BarH;
+	DrawPanel(BarX, BarY, BarW, BarH, YJJUI::WithAlpha(YJJUI::Cream, UI().BarAlpha));
+	AddHit(BarX, BarY, BarW, BarH, EAction::Blocker);
+
+	DrawRuneBag();
+	for (int32 Disk = 0; Disk < YJJ::NumDisks; ++Disk)
+	{
+		DrawDisk(Disk);
+	}
+	DrawWizardUpgrade();
+
+	// 끌고 있는 룬
+	if (DragRune != EYJJRune::None && FVector2f::Distance(Mouse, DragStart) > UI().DragThreshold)
+	{
+		const float Size = UI().DragIconSize;
+		DrawSprite(RuneTex(DragRune), Mouse, FVector2f(Size, Size), YJJUI::WithAlpha(FLinearColor::White, UI().DragIconAlpha), FMath::Sin(UITime * UI().DragWobbleSpeed) * UI().DragWobble);
+	}
+}
+
+FString AYJJDefenseHUD::DescribeEnemy(EYJJEnemy Enemy) const
+{
+	const FString Traits = YJJData::EnemyTraits(Enemy);
+	const FString& Name = YJJLoc::Get(YJJData::Enemy(Enemy).NameKey);
+	return Traits.IsEmpty() ? Name : YJJLoc::Format(TEXT("Enemy.WithTraits"), { Name, Traits });
 }
 
 FString AYJJDefenseHUD::DescribeWave(int32 WaveIndex) const
@@ -598,10 +755,12 @@ FString AYJJDefenseHUD::DescribeWave(int32 WaveIndex) const
 	{
 		if (Counts[Type] > 0)
 		{
-			const FString Traits = YJJData::EnemyTraits(static_cast<EYJJEnemy>(Type));
+			const EYJJEnemy Enemy = static_cast<EYJJEnemy>(Type);
+			const FString Traits = YJJData::EnemyTraits(Enemy);
+			const FString& Name = YJJLoc::Get(YJJData::Enemy(Enemy).NameKey);
 			Parts.Add(Traits.IsEmpty()
-				? FString::Printf(TEXT("%s x%d"), YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Name, Counts[Type])
-				: FString::Printf(TEXT("%s x%d  (%s)"), YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Name, Counts[Type], *Traits));
+				? YJJLoc::Format(TEXT("Wave.Group"), { Name, Counts[Type] })
+				: YJJLoc::Format(TEXT("Wave.GroupTraits"), { Name, Counts[Type], Traits }));
 		}
 	}
 	return FString::Join(Parts, TEXT("\n"));
@@ -610,47 +769,57 @@ FString AYJJDefenseHUD::DescribeWave(int32 WaveIndex) const
 void AYJJDefenseHUD::DrawWaveButton()
 {
 	const FYJJDefenseSim& Sim = Game->GetSim();
-	const float X = 1694.f;
-	const float Y = 954.f;
-	const float W = 206.f;
-	const float H = 112.f;
+	const float X = UI().WaveButtonX;
+	const float Y = UI().WaveButtonY;
+	const float W = UI().WaveButtonW;
+	const float H = UI().WaveButtonH;
+	const float CenterX = X + W * 0.5f;
+	const float BigX = X + UI().WaveBigTextX;
+	// 해골 아이콘 오른쪽 칸에 들어가는 너비
+	const float BigTextW = UI().WaveBigTextW;
+	const float Outline = UI().ButtonTextOutline;
+	const float BigOutline = UI().WaveBigOutline;
 	const int32 NextWave = Sim.WaveIndex + 1;
+	const FString EnemiesLeft = YJJLoc::Format(TEXT("Wave.EnemiesLeft"), { Sim.Enemies.Num() });
 
 	if (NextWave >= YJJData::NumWaves())
 	{
 		DrawPanel(X, Y, W, H, YJJUI::Gray);
-		DrawLabel(TEXT("마지막 웨이브"), X + W * 0.5f, Y + 40.f, 26.f, FLinearColor::White, EAlign::Center, 4.f);
-		DrawLabel(FString::Printf(TEXT("남은 적 %d"), Sim.Enemies.Num()), X + W * 0.5f, Y + 74.f, 22.f, FLinearColor::White, EAlign::Center, 4.f);
+		DrawLabel(YJJLoc::Get(TEXT("Wave.Last")), CenterX, Y + UI().WaveTopTextY, UI().WaveMidSize, FLinearColor::White, EAlign::Center, Outline, W - UI().TextFitPad);
+		DrawLabel(EnemiesLeft, CenterX, Y + UI().WaveLastLeftY, UI().WaveSmallSize, FLinearColor::White, EAlign::Center, Outline, W - UI().TextFitPad);
 		return;
 	}
 
 	const bool bCanCall = Sim.CanCallWave();
 	const bool bFirst = Sim.WaveIndex < 0;
 	// 첫 웨이브를 기다리는 동안은 눈에 띄게 들썩인다
-	const float Bounce = bFirst ? FMath::Abs(FMath::Sin(UITime * 4.f)) * 6.f : 0.f;
+	const float Bounce = bFirst ? FMath::Abs(FMath::Sin(UITime * UI().WaveBounceSpeed)) * UI().WaveBounce : 0.f;
 	const bool bHover = DrawButton(X, Y - Bounce, W, H, bFirst ? YJJUI::Green : YJJUI::Orange, EAction::CallWave, 0, 0, bCanCall);
-	const float Lift = Bounce + ((bHover && bCanCall) ? 2.f : 0.f);
+	const float Lift = Bounce + ((bHover && bCanCall) ? UI().ButtonHoverLift : 0.f);
+	const float TopY = Y + UI().WaveTopTextY;
+	const float BottomY = Y + UI().WaveBottomTextY;
 
-	DrawSprite(SkullIcon, FVector2f(X + 40.f, Y + 42.f - Lift), FVector2f(44.f, 44.f));
+	const float Skull = UI().WaveSkullSize;
+	DrawSprite(SkullIcon, FVector2f(X + UI().WaveSkullX, Y + UI().WaveSkullY - Lift), FVector2f(Skull, Skull));
 	if (bFirst)
 	{
-		DrawLabel(TEXT("출발!"), X + 122.f, Y + 40.f - Lift, 36.f, FLinearColor::White, EAlign::Center, 5.f);
-		DrawLabel(TEXT("스페이스"), X + W * 0.5f, Y + 82.f - Lift, 20.f, FLinearColor::White, EAlign::Center, 4.f);
+		DrawLabel(YJJLoc::Get(TEXT("Wave.Go")), BigX, TopY - Lift, UI().WaveBigSize, FLinearColor::White, EAlign::Center, BigOutline, BigTextW);
+		DrawLabel(YJJLoc::Get(TEXT("Wave.GoKey")), CenterX, BottomY - Lift, UI().WaveHintSize, FLinearColor::White, EAlign::Center, Outline, W - UI().TextFitPad);
 	}
 	else if (!bCanCall)
 	{
-		DrawLabel(TEXT("몰려온다"), X + 122.f, Y + 40.f, 26.f, FLinearColor::White, EAlign::Center, 4.f);
-		DrawLabel(FString::Printf(TEXT("남은 적 %d"), Sim.Enemies.Num()), X + W * 0.5f, Y + 80.f, 22.f, FLinearColor::White, EAlign::Center, 4.f);
+		DrawLabel(YJJLoc::Get(TEXT("Wave.Incoming")), BigX, TopY, UI().WaveMidSize, FLinearColor::White, EAlign::Center, Outline, BigTextW);
+		DrawLabel(EnemiesLeft, CenterX, Y + UI().WaveBusyLeftY, UI().WaveSmallSize, FLinearColor::White, EAlign::Center, Outline, W - UI().TextFitPad);
 	}
 	else
 	{
-		DrawLabel(FString::Printf(TEXT("%d초"), FMath::CeilToInt(Sim.NextWaveTimer)), X + 122.f, Y + 40.f - Lift, 36.f, FLinearColor::White, EAlign::Center, 5.f);
-		DrawLabel(FString::Printf(TEXT("지금 부르면 +%d"), FMath::RoundToInt(Sim.NextWaveTimer)), X + W * 0.5f, Y + 82.f - Lift, 20.f, FLinearColor::White, EAlign::Center, 4.f);
+		DrawLabel(YJJLoc::Format(TEXT("Wave.Timer"), { FMath::CeilToInt(Sim.NextWaveTimer) }), BigX, TopY - Lift, UI().WaveBigSize, FLinearColor::White, EAlign::Center, BigOutline, BigTextW);
+		DrawLabel(YJJLoc::Format(TEXT("Wave.EarlyBonus"), { FMath::RoundToInt(Sim.NextWaveTimer * YJJData::Tune().EarlyCallGoldPerSecond) }), CenterX, BottomY - Lift, UI().WaveHintSize, FLinearColor::White, EAlign::Center, Outline, W - UI().TextFitPad);
 	}
 
 	if (bHover)
 	{
-		SetTooltip(FString::Printf(TEXT("다음: 웨이브 %d"), NextWave + 1), DescribeWave(NextWave), YJJUI::Ink);
+		SetTooltip(YJJLoc::Format(TEXT("Tip.NextWave"), { NextWave + 1 }), DescribeWave(NextWave), YJJUI::Ink);
 	}
 }
 
@@ -659,47 +828,27 @@ FString AYJJDefenseHUD::DescribeTower(EYJJTower Type, int32 Level) const
 	const FYJJTowerDef& Def = YJJData::Tower(Type);
 	const FYJJTowerLevel& Stats = Def.Levels[FMath::Clamp(Level, 0, YJJ::MaxTowerLevel)];
 
-	FString Body = Def.Desc;
+	FString Body = YJJLoc::Get(Def.DescKey);
+	Body += TEXT("\n");
 	if (Type == EYJJTower::Barracks)
 	{
-		Body += FString::Printf(TEXT("\n병졸 체력 %.0f · 공격 %.0f · 방어 %d%%"), Stats.SoldierHP, Stats.Damage, FMath::RoundToInt(Stats.SoldierArmor * 100.f));
+		Body += YJJLoc::Format(TEXT("Tower.SoldierStats"), { Whole(Stats.SoldierHP), Whole(Stats.Damage), Percent(Stats.SoldierArmor) });
 	}
 	else
 	{
-		Body += FString::Printf(TEXT("\n피해 %.0f%s · %.1f초마다 · 사거리 %.0f"), Stats.Damage, Def.bMagic ? TEXT("(마법)") : TEXT(""), Stats.Interval, Stats.Range);
+		Body += YJJLoc::Format(TEXT("Tower.Stats"), { Whole(Stats.Damage), Def.bMagic ? YJJLoc::Get(TEXT("Tower.MagicTag")) : FString(), OneDecimal(Stats.Interval), Whole(Stats.Range) });
 		if (Stats.Splash > 0.f)
 		{
-			Body += FString::Printf(TEXT(" · 폭발 %.0f"), Stats.Splash);
+			Body += YJJLoc::Format(TEXT("Tower.Splash"), { Whole(Stats.Splash) });
 		}
 	}
 	return Body;
 }
 
-void AYJJDefenseHUD::DrawTowerMenu()
+void AYJJDefenseHUD::GatherMenuOptions(TArray<FMenuOption>& Options)
 {
-	FYJJDefenseSim& Sim = Game->GetSim();
-	HoverBuildType = INDEX_NONE;
-	bHoverUpgrade = false;
-	if (!Sim.Towers.IsValidIndex(SelectedSpot))
-	{
-		return;
-	}
-
+	const FYJJDefenseSim& Sim = Game->GetSim();
 	const FYJJTowerState& Tower = Sim.Towers[SelectedSpot];
-	const FVector2f SpotPos = YJJMap::Spots()[SelectedSpot];
-
-	struct FOption
-	{
-		EAction Action;
-		int32 B;
-		UTexture2D* Icon;
-		FVector2f IconSize;
-		int32 Cost;        // 0이면 가격 표시 없음, 음수면 받는 돈
-		bool bEnabled;
-		FString Title;
-		FString Body;
-	};
-	TArray<FOption, TInlineAllocator<5>> Options;
 
 	if (!Tower.bBuilt)
 	{
@@ -712,57 +861,85 @@ void AYJJDefenseHUD::DrawTowerMenu()
 			}
 			const FYJJTowerDef& Def = YJJData::Tower(Type);
 			UTexture2D* Icon = TowerTextures[Index][0];
-			Options.Add({ EAction::BuildTower, Index, Icon, TexSize(Icon) * 0.3f, Def.Levels[0].Cost, Sim.CanBuild(SelectedSpot, Type), Def.Name, DescribeTower(Type, 0) });
+			Options.Add({ EAction::BuildTower, Index, Icon, TexSize(Icon) * UI().MenuTowerIconScale, Def.Levels[0].Cost, Sim.CanBuild(SelectedSpot, Type),
+				YJJLoc::Get(Def.NameKey), DescribeTower(Type, 0) });
 		}
-	}
-	else
-	{
-		const FYJJTowerDef& Def = YJJData::Tower(Tower.Type);
-		if (Tower.Level < YJJ::MaxTowerLevel)
-		{
-			Options.Add({ EAction::UpgradeTower, 0, UpIcon, FVector2f(48.f, 48.f), Sim.UpgradeCost(SelectedSpot), Sim.CanUpgrade(SelectedSpot),
-				FString::Printf(TEXT("%s Lv%d > Lv%d"), Def.Name, Tower.Level + 1, Tower.Level + 2), DescribeTower(Tower.Type, Tower.Level + 1) });
-		}
-		if (Tower.Type == EYJJTower::Shrine)
-		{
-			Options.Add({ EAction::CycleShrine, 0, CycleIcon, FVector2f(44.f, 44.f), 0, true,
-				FString::Printf(TEXT("원소 바꾸기 (지금: %s)"), YJJData::ElementName(Tower.ShrineElement)), TEXT("제단이 묻히는 원소를 바꾼다.\n스펠과 다른 원소여야 반응이 일어난다") });
-		}
-		Options.Add({ EAction::SellTower, 0, SellIcon, FVector2f(46.f, 46.f), -Sim.SellValue(SelectedSpot), true, TEXT("팔기"), TEXT("쓴 돈의 60%를 돌려받는다") });
+		return;
 	}
 
-	const float ButtonW = 92.f;
-	const float ButtonH = 108.f;
-	const float Gap = 8.f;
-	const float TotalW = Options.Num() * ButtonW + (Options.Num() - 1) * Gap;
-	const float Top = Tower.bBuilt ? SpotPos.Y - 262.f : SpotPos.Y - 182.f;
-	const float X0 = FMath::Clamp(SpotPos.X - TotalW * 0.5f, 12.f, YJJ::ViewW - TotalW - 12.f);
-	const float Y0 = Top < 84.f ? SpotPos.Y + 54.f : Top;
+	const FYJJTowerDef& Def = YJJData::Tower(Tower.Type);
+	if (Tower.Level < YJJ::MaxTowerLevel)
+	{
+		const float Icon = UI().MenuUpIconSize;
+		Options.Add({ EAction::UpgradeTower, 0, UpIcon, FVector2f(Icon, Icon), Sim.UpgradeCost(SelectedSpot), Sim.CanUpgrade(SelectedSpot),
+			YJJLoc::Format(TEXT("Menu.Upgrade"), { YJJLoc::Get(Def.NameKey), Tower.Level + 1, Tower.Level + 2 }), DescribeTower(Tower.Type, Tower.Level + 1) });
+	}
+	if (Tower.Type == EYJJTower::Shrine)
+	{
+		const float Icon = UI().MenuCycleIconSize;
+		Options.Add({ EAction::CycleShrine, 0, CycleIcon, FVector2f(Icon, Icon), 0, true,
+			YJJLoc::Format(TEXT("Menu.Cycle.Title"), { YJJData::ElementName(Tower.ShrineElement) }),
+			YJJLoc::Get(TEXT("Menu.Cycle.Body")) });
+	}
+	const float Icon = UI().MenuSellIconSize;
+	Options.Add({ EAction::SellTower, 0, SellIcon, FVector2f(Icon, Icon), -Sim.SellValue(SelectedSpot), true, YJJLoc::Get(TEXT("Menu.Sell.Title")),
+		YJJLoc::Format(TEXT("Menu.Sell.Body"), { Percent(YJJData::Tune().SellRefund) }) });
+}
+
+void AYJJDefenseHUD::DrawTowerMenu()
+{
+	const FYJJDefenseSim& Sim = Game->GetSim();
+	HoverBuildType = INDEX_NONE;
+	bHoverUpgrade = false;
+	if (!Sim.Towers.IsValidIndex(SelectedSpot))
+	{
+		return;
+	}
+
+	const FYJJTowerState& Tower = Sim.Towers[SelectedSpot];
+	const FVector2f SpotPos = YJJMap::Spots()[SelectedSpot];
+
+	TArray<FMenuOption> Options;
+	GatherMenuOptions(Options);
+	if (Options.IsEmpty())
+	{
+		return;
+	}
+
+	const float ButtonW = UI().MenuButtonW;
+	const float ButtonH = UI().MenuButtonH;
+	const float Coin = UI().MenuCoinSize;
 
 	if (Tower.bBuilt)
 	{
-		const FString Header = FString::Printf(TEXT("%s Lv%d"), YJJData::Tower(Tower.Type).Name, Tower.Level + 1);
-		DrawLabel(Header, X0 + TotalW * 0.5f, Y0 - 20.f, 26.f, FLinearColor::White, EAlign::Center, 5.f);
+		const FVector2f First = TowerMenuButtonCenter(SpotPos, Options.Num(), 0, true);
+		const FVector2f Last = TowerMenuButtonCenter(SpotPos, Options.Num(), Options.Num() - 1, true);
+		const FString Header = YJJLoc::Format(TEXT("Menu.Header"), { YJJLoc::Get(YJJData::Tower(Tower.Type).NameKey), Tower.Level + 1 });
+		DrawLabel(Header, (First.X + Last.X) * 0.5f, First.Y - ButtonH * 0.5f - UI().MenuHeaderUp, UI().MenuHeaderSize, FLinearColor::White, EAlign::Center, UI().MenuHeaderOutline);
 	}
 
 	for (int32 Index = 0; Index < Options.Num(); ++Index)
 	{
-		const FOption& Option = Options[Index];
-		const float X = X0 + Index * (ButtonW + Gap);
-		const bool bHover = DrawButton(X, Y0, ButtonW, ButtonH, FLinearColor::White, Option.Action, SelectedSpot, Option.B, Option.bEnabled);
-		const float Lift = (bHover && Option.bEnabled) ? 2.f : 0.f;
-		const FLinearColor IconTint = Option.bEnabled ? FLinearColor::White : YJJUI::Hex(0x9A96A8);
+		const FMenuOption& Option = Options[Index];
+		const FVector2f Center = TowerMenuButtonCenter(SpotPos, Options.Num(), Index, Tower.bBuilt);
+		const float X = Center.X - ButtonW * 0.5f;
+		const float Y = Center.Y - ButtonH * 0.5f;
+		const bool bHover = DrawButton(X, Y, ButtonW, ButtonH, FLinearColor::White, Option.Action, SelectedSpot, Option.B, Option.bEnabled);
+		const float Lift = (bHover && Option.bEnabled) ? UI().ButtonHoverLift : 0.f;
+		const FLinearColor IconTint = Option.bEnabled ? FLinearColor::White : YJJUI::IconDisabled;
 
-		DrawSprite(Option.Icon, FVector2f(X + ButtonW * 0.5f, Y0 + 40.f - Lift), Option.IconSize, IconTint);
+		DrawSprite(Option.Icon, FVector2f(Center.X, Y + UI().MenuIconY - Lift), Option.IconSize, IconTint);
 		if (Option.Cost != 0)
 		{
-			DrawSprite(CoinIcon, FVector2f(X + 24.f, Y0 + 86.f - Lift), FVector2f(22.f, 22.f));
-			const FString CostText = Option.Cost > 0 ? FString::FromInt(Option.Cost) : FString::Printf(TEXT("+%d"), -Option.Cost);
-			DrawLabel(CostText, X + 40.f, Y0 + 84.f - Lift, 24.f, Option.Cost < 0 ? YJJUI::Hex(0x3E9B2B) : (Option.bEnabled ? YJJUI::Ink : YJJUI::Red));
+			DrawSprite(CoinIcon, FVector2f(X + UI().MenuCoinX, Y + UI().MenuCoinY - Lift), FVector2f(Coin, Coin));
+			const FString CostText = Option.Cost > 0 ? FString::FromInt(Option.Cost) : YJJLoc::Format(TEXT("Fx.Gold"), { -Option.Cost });
+			const FLinearColor CostColor = Option.Cost < 0 ? YJJUI::Gain : (Option.bEnabled ? YJJUI::Ink : YJJUI::Red);
+			DrawLabel(CostText, X + UI().MenuCostX, Y + UI().MenuCostY - Lift, UI().MenuCostSize, CostColor);
 		}
 		else if (Option.Action == EAction::CycleShrine)
 		{
-			DrawSprite(RuneTex(YJJData::ElementRune(Tower.ShrineElement)), FVector2f(X + ButtonW * 0.5f, Y0 + 84.f - Lift), FVector2f(30.f, 30.f));
+			const float Rune = UI().MenuShrineRuneSize;
+			DrawSprite(RuneTex(YJJData::ElementRune(Tower.ShrineElement)), FVector2f(Center.X, Y + UI().MenuCostY - Lift), FVector2f(Rune, Rune));
 		}
 
 		if (bHover)
@@ -793,19 +970,21 @@ void AYJJDefenseHUD::DrawTargeting()
 	// 스펠이 닿을 범위와, 마법사에서 그곳까지의 점선
 	const FYJJSpellSpec& Spell = Sim.Disks[ArmedDisk].Spell;
 	const FLinearColor Color = YJJData::ElementColor(Spell.Elements[0]);
-	const FVector2f From = YJJMap::WizardPos() + FVector2f(-20.f, -128.f);
-	const int32 Dots = 14;
+	const FVector2f From = YJJMap::WizardPos() + FVector2f(UI().TargetFromX, UI().TargetFromY);
+	const int32 Dots = FMath::RoundToInt(UI().TargetDots);
+	const float Dot = UI().TargetDotSize;
 	for (int32 Index = 1; Index < Dots; ++Index)
 	{
-		const float T = FMath::Fmod(static_cast<float>(Index) / Dots + UITime * 0.5f, 1.f);
+		const float T = FMath::Fmod(static_cast<float>(Index) / Dots + UITime * UI().TargetDotSpeed, 1.f);
 		FVector2f Point = FMath::Lerp(From, Mouse, T);
-		Point.Y -= 90.f * 4.f * T * (1.f - T);
-		DrawSprite(DiscTexture, Point, FVector2f(16.f, 16.f), YJJUI::WithAlpha(Color, 0.9f));
+		Point.Y -= UI().TargetArc * UI().ArcPeakScale * T * (1.f - T);
+		DrawSprite(DiscTexture, Point, FVector2f(Dot, Dot), YJJUI::WithAlpha(Color, UI().TargetDotAlpha));
 	}
 	DrawEllipseRange(Mouse, Spell.Radius, Color);
 	if (Spell.Reaction != EYJJReaction::None)
 	{
-		DrawLabel(YJJSpellForge::ReactionInfo(Spell.Reaction).Name, Mouse.X, Mouse.Y - Spell.Radius / YJJ::YStretch - 22.f, 24.f, YJJSpellForge::ReactionInfo(Spell.Reaction).Color, EAlign::Center, 4.f);
+		const FYJJReactionDef& Reaction = YJJData::Reaction(Spell.Reaction);
+		DrawLabel(YJJLoc::Get(Reaction.NameKey), Mouse.X, Mouse.Y - Spell.Radius / YJJ::YStretch - UI().TargetReactionUp, UI().TargetReactionSize, Reaction.Color, EAlign::Center, UI().ButtonTextOutline);
 	}
 }
 
@@ -817,10 +996,9 @@ void AYJJDefenseHUD::DrawBanner(float DeltaSeconds)
 	}
 	BannerTime -= DeltaSeconds;
 
-	// 왼쪽에서 미끄러져 들어와 잠깐 머문다
-	const float Alpha = FMath::Clamp(BannerTime * 3.f, 0.f, 1.f);
-	DrawBox(0.f, 404.f, YJJ::ViewW, 112.f, YJJUI::WithAlpha(YJJUI::Ink, 0.45f * Alpha));
-	DrawLabel(BannerText, YJJ::ViewW * 0.5f, 456.f, 78.f, YJJUI::WithAlpha(BannerColor, Alpha), EAlign::Center, 8.f);
+	const float Alpha = FMath::Clamp(BannerTime * UI().BannerFadeSpeed, 0.f, 1.f);
+	DrawBox(0.f, UI().BannerY, YJJ::ViewW, UI().BannerH, YJJUI::WithAlpha(YJJUI::Ink, UI().BannerDim * Alpha));
+	DrawLabel(BannerText, YJJ::ViewW * 0.5f, UI().BannerTextY, UI().BannerTextSize, YJJUI::WithAlpha(BannerColor, Alpha), EAlign::Center, UI().BannerOutline);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -843,28 +1021,32 @@ void AYJJDefenseHUD::DrawTooltip()
 
 	TArray<FString> Lines;
 	TooltipBody.ParseIntoArrayLines(Lines, false);
-	int32 MaxChars = TooltipTitle.Len() + 3;
+	int32 MaxChars = TooltipTitle.Len() + FMath::RoundToInt(UI().TooltipTitleExtraChars);
 	for (const FString& Line : Lines)
 	{
 		MaxChars = FMath::Max(MaxChars, Line.Len());
 	}
 
 	// 한글 한 글자를 대략 글자 크기만큼으로 잡는다 (공백·숫자가 섞여 조금 넉넉하다)
-	const float W = FMath::Clamp(MaxChars * 19.f + 44.f, 240.f, 760.f);
-	const float H = 62.f + Lines.Num() * 28.f;
-	float X = Mouse.X + 24.f;
-	float Y = Mouse.Y - H - 18.f;
-	if (X + W > YJJ::ViewW - 10.f)
+	const float Margin = UI().TooltipScreenMargin;
+	const float Offset = UI().TooltipMouseOffset;
+	const float W = FMath::Clamp(MaxChars * UI().TooltipCharWidth + UI().TooltipPadW, UI().TooltipMinW, UI().TooltipMaxW);
+	const float LineHeight = UI().TooltipLineHeight;
+	const float H = UI().TooltipPadH + Lines.Num() * LineHeight;
+	float X = Mouse.X + Offset;
+	float Y = Mouse.Y - H - UI().TooltipAbove;
+	if (X + W > YJJ::ViewW - Margin)
 	{
-		X = Mouse.X - W - 24.f;
+		X = Mouse.X - W - Offset;
 	}
-	X = FMath::Clamp(X, 10.f, YJJ::ViewW - W - 10.f);
-	if (Y < 10.f)
+	X = FMath::Clamp(X, Margin, YJJ::ViewW - W - Margin);
+	if (Y < Margin)
 	{
-		Y = Mouse.Y + 30.f;
+		Y = Mouse.Y + UI().TooltipBelow;
 	}
 
-	DrawPanel(X, Y, W, H, YJJUI::WithAlpha(FLinearColor::White, 0.97f));
-	DrawLabel(TooltipTitle, X + 22.f, Y + 30.f, 28.f, TooltipColor);
-	DrawParagraph(TooltipBody, X + 22.f, Y + 64.f, 21.f, YJJUI::DarkGray, 28.f);
+	const float TextX = X + UI().TooltipTextX;
+	DrawPanel(X, Y, W, H, YJJUI::WithAlpha(FLinearColor::White, UI().TooltipAlpha));
+	DrawLabel(TooltipTitle, TextX, Y + UI().TooltipTitleY, UI().TooltipTitleSize, TooltipColor);
+	DrawParagraph(TooltipBody, TextX, Y + UI().TooltipBodyY, UI().TooltipBodySize, YJJUI::DarkGray, LineHeight);
 }

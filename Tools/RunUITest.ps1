@@ -3,7 +3,9 @@
 param(
     [string]$EngineDir = "D:\source\repos\UnrealEngine\Engine",
     [int]$ResX = 1280,
-    [int]$ResY = 720
+    [int]$ResY = 720,
+    # 화면 글자 언어 (ko, en …). 비우면 OS 언어
+    [string]$Lang = ""
 )
 
 $ProjectDir = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -18,6 +20,7 @@ $GameArgs = @(
     "`"$Project`"", "-game", "-windowed", "-ResX=$ResX", "-ResY=$ResY", "-nosplash", "-unattended", "-NoSound", "-YJJSave=UITest",
     "-ExecCmds=`"yjj.UITest 1`"", "-log", "-abslog=`"$Log`""
 )
+if ($Lang) { $GameArgs += "-yjjlang=$Lang" }
 $Process = Start-Process -FilePath $Editor -ArgumentList $GameArgs -PassThru
 if (-not $Process.WaitForExit(300 * 1000)) {
     $Process.Kill()

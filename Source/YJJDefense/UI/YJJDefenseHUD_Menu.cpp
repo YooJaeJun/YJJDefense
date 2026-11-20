@@ -1,10 +1,39 @@
 // 준비 화면(수집품, 들고 나갈 룬·병졸 고르기)과 결과 화면(수집 점수, 해금)
 
 #include "UI/YJJDefenseHUD.h"
+#include "Data/YJJLoc.h"
+#include "Data/YJJTuning.h"
+#include "Data/YJJUILayout.h"
 #include "Engine/Texture2D.h"
 #include "Game/YJJGameData.h"
+#include "Game/YJJSpellForge.h"
 #include "UI/YJJUIStyle.h"
 #include "YJJDefenseGameMode.h"
+
+FVector2f AYJJDefenseHUD::LoadoutRuneCenter(int32 Index)
+{
+	const int32 Columns = FMath::RoundToInt(UI().RuneCardColumns);
+	const float X = UI().RunePanelX + UI().CardIndentX + (Index % Columns) * UI().RuneCardStepX;
+	const float Y = UI().LoadoutPanelY + UI().CardTop + (Index / Columns) * UI().RuneCardStepY;
+	return FVector2f(X + UI().RuneCardW * 0.5f, Y + UI().RuneCardH * 0.5f);
+}
+
+FVector2f AYJJDefenseHUD::StartButtonCenter()
+{
+	return FVector2f(YJJ::ViewW * 0.5f, UI().StartButtonY + UI().StartButtonH * 0.5f);
+}
+
+int32 AYJJDefenseHUD::UnlockPoints(bool bTower, int32 Index) const
+{
+	for (const FYJJUnlock& Unlock : YJJData::UnlockTrack())
+	{
+		if (Unlock.bTower == bTower && Unlock.Index == Index)
+		{
+			return Unlock.PointsNeeded;
+		}
+	}
+	return 0;
+}
 
 void AYJJDefenseHUD::DrawLoadout()
 {
@@ -13,221 +42,272 @@ void AYJJDefenseHUD::DrawLoadout()
 	{
 		return;
 	}
-	using namespace YJJUI;
 
-	DrawDimmedMap(0.3f, Save->SelectedMap);
+	DrawDimmedMap(UI().LoadoutDim, Save->SelectedMap);
 
 	// 제목 옆에서 까딱거리는 녀석들
-	const float Hop = FMath::Abs(FMath::Sin(UITime * 5.f)) * 10.f;
-	DrawSpriteFeet(EnemyTextures[static_cast<int32>(EYJJEnemy::Imp)][FMath::FloorToInt(UITime * 5.f) & 1], FVector2f(560.f, 128.f - Hop), FVector2f(1.2f, 1.2f));
-	DrawSpriteFeet(EnemyTextures[static_cast<int32>(EYJJEnemy::Potato)][FMath::FloorToInt(UITime * 4.f) & 1], FVector2f(1370.f, 132.f), FVector2f(1.1f, 1.1f), FLinearColor::White, true);
-	DrawLabel(TEXT("YJJ 디펜스"), YJJ::ViewW * 0.5f, 70.f, 92.f, FLinearColor::White, EAlign::Center, 9.f);
-	DrawLabel(TEXT("룬을 모으고, 섞고, 한 판 더!"), YJJ::ViewW * 0.5f, 136.f, 30.f, Yellow, EAlign::Center, 5.f);
+	const float Hop = FMath::Abs(FMath::Sin(UITime * UI().TitleHopSpeed)) * UI().TitleHop;
+	const float ImpScale = UI().TitleImpScale;
+	const float PotatoScale = UI().TitlePotatoScale;
+	DrawSpriteFeet(EnemyTextures[static_cast<int32>(EYJJEnemy::Imp)][FMath::FloorToInt(UITime * UI().TitleImpFrameRate) % EnemyFrames],
+		FVector2f(UI().TitleImpX, UI().TitleImpY - Hop), FVector2f(ImpScale, ImpScale));
+	DrawSpriteFeet(EnemyTextures[static_cast<int32>(EYJJEnemy::Potato)][FMath::FloorToInt(UITime * UI().TitlePotatoFrameRate) % EnemyFrames],
+		FVector2f(UI().TitlePotatoX, UI().TitlePotatoY), FVector2f(PotatoScale, PotatoScale), FLinearColor::White, true);
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.Title")), YJJ::ViewW * 0.5f, UI().TitleY, UI().TitleSize, FLinearColor::White, EAlign::Center, UI().TitleOutline);
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.Subtitle")), YJJ::ViewW * 0.5f, UI().SubtitleY, UI().SubtitleSize, YJJUI::Yellow, EAlign::Center, UI().SubtitleOutline);
 
-	const int32 NumBagRunes = FMath::CountBits(static_cast<uint32>(Save->SelectedRunes));
-	const int32 NumBagTowers = FMath::CountBits(static_cast<uint32>(Save->SelectedTowers));
-	const TConstArrayView<FYJJUnlock> Track = YJJProgression::UnlockTrack();
+	DrawLoadoutRunes(*Save);
+	DrawLoadoutTowers(*Save);
+	DrawLoadoutProgress(*Save);
 
-	auto UnlockPoints = [&Track](bool bTower, int32 Index)
-	{
-		for (const FYJJUnlock& Unlock : Track)
-		{
-			if (Unlock.bTower == bTower && Unlock.Index == Index)
-			{
-				return Unlock.PointsNeeded;
-			}
-		}
-		return 0;
-	};
+	// 출전
+	const float SW = UI().StartButtonW;
+	const float SH = UI().StartButtonH;
+	const float SX = (YJJ::ViewW - SW) * 0.5f;
+	const float SY = UI().StartButtonY - FMath::Abs(FMath::Sin(UITime * UI().StartBounceSpeed)) * UI().StartBounce;
+	const bool bStartHover = DrawButton(SX, SY, SW, SH, YJJUI::Green, EAction::StartRun);
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.Start")), YJJ::ViewW * 0.5f, SY + UI().StartTextY - (bStartHover ? UI().ButtonHoverLift : 0.f), UI().StartTextSize, FLinearColor::White, EAlign::Center, UI().StartTextOutline);
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.StartKey")), YJJ::ViewW * 0.5f, SY + UI().StartKeyY, UI().StartKeySize, FLinearColor::White, EAlign::Center, UI().ButtonTextOutline);
 
-	// ---------------- 룬 수집 ----------------
-	const float AX = 70.f;
-	const float AY = 186.f;
-	DrawPanel(AX, AY, 640.f, 600.f, WithAlpha(Cream, 0.97f));
-	DrawLabel(TEXT("룬 수집"), AX + 30.f, AY + 40.f, 36.f, Ink);
-	DrawLabel(FString::Printf(TEXT("가방 %d/%d"), NumBagRunes, YJJProgression::MaxBagRunes), AX + 470.f, AY + 42.f, 26.f, DarkGray);
+	DrawMapPicker(*Save);
+	DrawLoadoutParade(*Save);
+}
+
+void AYJJDefenseHUD::DrawLoadoutRunes(const UYJJSaveGame& Save)
+{
+	const float AX = UI().RunePanelX;
+	const float AY = UI().LoadoutPanelY;
+	const float W = UI().RuneCardW;
+	const float H = UI().RuneCardH;
+	const float Icon = UI().RuneCardIcon;
+	const float Lock = UI().RuneCardLock;
+	const float Check = UI().CardCheckSize;
+	const float CheckInset = UI().CardCheckInset;
+	const float IconY = UI().RuneCardIconY;
+	const float NameY = UI().RuneCardNameY;
+
+	DrawPanel(AX, AY, UI().RunePanelW, UI().LoadoutPanelH, YJJUI::WithAlpha(YJJUI::Cream, UI().PanelAlpha));
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.Runes")), AX + UI().PanelTitleX, AY + UI().PanelTitleY, UI().PanelTitleSize, YJJUI::Ink);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.RuneBag"), { FMath::CountBits(static_cast<uint32>(Save.SelectedRunes)), YJJData::Tune().MaxBagRunes }),
+		AX + UI().RuneCountX, AY + UI().PanelCountY, UI().PanelCountSize, YJJUI::DarkGray);
 
 	for (int32 Index = 0; Index < static_cast<int32>(EYJJRune::Count); ++Index)
 	{
 		const EYJJRune Rune = static_cast<EYJJRune>(Index);
 		const FYJJRuneDef& Def = YJJData::Rune(Rune);
-		const bool bUnlocked = (Save->UnlockedRunes & (1 << Index)) != 0;
-		const bool bSelected = (Save->SelectedRunes & (1 << Index)) != 0;
-		const float X = AX + 26.f + (Index % 3) * 198.f;
-		const float Y = AY + 84.f + (Index / 3) * 168.f;
-		const float W = 186.f;
-		const float H = 156.f;
+		const bool bUnlocked = (Save.UnlockedRunes & (1 << Index)) != 0;
+		const bool bSelected = (Save.SelectedRunes & (1 << Index)) != 0;
+		const FVector2f Center = LoadoutRuneCenter(Index);
+		const float X = Center.X - W * 0.5f;
+		const float Y = Center.Y - H * 0.5f;
 
-		const bool bHover = DrawButton(X, Y, W, H, bSelected ? Hex(0xFFE98A) : (bUnlocked ? FLinearColor::White : Hex(0xCFCBDA)), EAction::ToggleRune, Index, 0, bUnlocked);
-		const float Lift = (bHover && bUnlocked) ? 2.f : 0.f;
-		DrawSprite(RuneTex(Rune), FVector2f(X + W * 0.5f, Y + 62.f - Lift), FVector2f(92.f, 92.f), bUnlocked ? FLinearColor::White : Hex(0x7C7888));
+		const bool bHover = DrawButton(X, Y, W, H, bSelected ? YJJUI::CardPicked : (bUnlocked ? FLinearColor::White : YJJUI::CardLocked), EAction::ToggleRune, Index, 0, bUnlocked);
+		const float Lift = (bHover && bUnlocked) ? UI().ButtonHoverLift : 0.f;
+		DrawSprite(RuneTex(Rune), FVector2f(Center.X, Y + IconY - Lift), FVector2f(Icon, Icon), bUnlocked ? FLinearColor::White : YJJUI::IconLocked);
 		if (bUnlocked)
 		{
-			DrawLabel(Def.SpellName, X + W * 0.5f, Y + 130.f - Lift, 24.f, Ink, EAlign::Center);
+			DrawLabel(YJJLoc::Get(Def.SpellKey), Center.X, Y + NameY - Lift, UI().CardNameSize, YJJUI::Ink, EAlign::Center, 0.f, W - UI().TextFitPad);
 			if (bSelected)
 			{
-				DrawSprite(CheckIcon, FVector2f(X + W - 26.f, Y + 26.f - Lift), FVector2f(36.f, 36.f));
+				DrawSprite(CheckIcon, FVector2f(X + W - CheckInset, Y + CheckInset - Lift), FVector2f(Check, Check));
 			}
 		}
 		else
 		{
-			DrawSprite(LockIcon, FVector2f(X + W * 0.5f, Y + 62.f), FVector2f(48.f, 48.f));
-			DrawLabel(FString::Printf(TEXT("수집 %d점"), UnlockPoints(false, Index)), X + W * 0.5f, Y + 130.f, 22.f, DarkGray, EAlign::Center);
+			DrawSprite(LockIcon, FVector2f(Center.X, Y + IconY), FVector2f(Lock, Lock));
+			DrawLabel(YJJLoc::Format(TEXT("Loadout.UnlockAt"), { UnlockPoints(false, Index) }), Center.X, Y + NameY, UI().CardLockedSize, YJJUI::DarkGray, EAlign::Center);
 		}
 
 		if (bHover)
 		{
-			const FString Kind = YJJData::IsElementRune(Rune) ? TEXT("원소 룬") : TEXT("형태 룬");
-			SetTooltip(FString::Printf(TEXT("%s (%s)"), Def.SpellName, *Kind),
-				FString(Def.Desc) + (bUnlocked ? (bSelected ? TEXT("\n눌러서 가방에서 빼기") : TEXT("\n눌러서 가방에 넣기")) : TEXT("\n수집 점수를 모으면 풀린다")), Ink);
+			const FString Kind = YJJData::IsElementRune(Rune) ? YJJLoc::Get(TEXT("Loadout.ElementRune")) : YJJLoc::Get(TEXT("Loadout.FormRune"));
+			const FString Hint = !bUnlocked ? YJJLoc::Get(TEXT("Loadout.LockedHint"))
+				: (bSelected ? YJJLoc::Get(TEXT("Loadout.RemoveHint")) : YJJLoc::Get(TEXT("Loadout.AddHint")));
+			SetTooltip(YJJLoc::Format(TEXT("Loadout.RuneTip"), { YJJLoc::Get(Def.SpellKey), Kind }), YJJLoc::Get(Def.DescKey) + TEXT("\n") + Hint, YJJUI::Ink);
 		}
 	}
+}
 
-	// ---------------- 병졸 수집 ----------------
-	const float BX = 730.f;
-	DrawPanel(BX, AY, 560.f, 600.f, WithAlpha(Cream, 0.97f));
-	DrawLabel(TEXT("병졸 수집"), BX + 30.f, AY + 40.f, 36.f, Ink);
-	DrawLabel(FString::Printf(TEXT("출전 %d/%d"), NumBagTowers, YJJProgression::MaxBagTowers), BX + 390.f, AY + 42.f, 26.f, DarkGray);
+void AYJJDefenseHUD::DrawLoadoutTowers(const UYJJSaveGame& Save)
+{
+	const float BX = UI().TowerPanelX;
+	const float AY = UI().LoadoutPanelY;
+	const float W = UI().TowerCardW;
+	const float H = UI().TowerCardH;
+	const int32 Columns = FMath::RoundToInt(UI().TowerCardColumns);
+	const float Lock = UI().TowerCardLock;
+	const float Check = UI().CardCheckSize;
+	const float CheckInset = UI().CardCheckInset;
+	const float IconY = UI().TowerCardIconY;
+	const float NameY = UI().TowerCardNameY;
+
+	DrawPanel(BX, AY, UI().TowerPanelW, UI().LoadoutPanelH, YJJUI::WithAlpha(YJJUI::Cream, UI().PanelAlpha));
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.Towers")), BX + UI().PanelTitleX, AY + UI().PanelTitleY, UI().PanelTitleSize, YJJUI::Ink);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.TowerBag"), { FMath::CountBits(static_cast<uint32>(Save.SelectedTowers)), YJJData::Tune().MaxBagTowers }),
+		BX + UI().TowerCountX, AY + UI().PanelCountY, UI().PanelCountSize, YJJUI::DarkGray);
 
 	for (int32 Index = 0; Index < static_cast<int32>(EYJJTower::Count); ++Index)
 	{
 		const EYJJTower Type = static_cast<EYJJTower>(Index);
 		const FYJJTowerDef& Def = YJJData::Tower(Type);
-		const bool bUnlocked = (Save->UnlockedTowers & (1 << Index)) != 0;
-		const bool bSelected = (Save->SelectedTowers & (1 << Index)) != 0;
+		const bool bUnlocked = (Save.UnlockedTowers & (1 << Index)) != 0;
+		const bool bSelected = (Save.SelectedTowers & (1 << Index)) != 0;
 		// 윗줄 셋, 아랫줄 둘(가운데 정렬)
-		const int32 Row = Index / 3;
-		const float X = BX + 22.f + (Index % 3) * 174.f + (Row == 1 ? 87.f : 0.f);
-		const float Y = AY + 84.f + Row * 254.f;
-		const float W = 164.f;
-		const float H = 242.f;
+		const int32 Row = Index / Columns;
+		const float X = BX + UI().TowerCardIndentX + (Index % Columns) * UI().TowerCardStepX + (Row > 0 ? UI().TowerSecondRowShift : 0.f);
+		const float Y = AY + UI().CardTop + Row * UI().TowerCardStepY;
 
-		const bool bHover = DrawButton(X, Y, W, H, bSelected ? Hex(0xFFE98A) : (bUnlocked ? FLinearColor::White : Hex(0xCFCBDA)), EAction::ToggleTower, Index, 0, bUnlocked);
-		const float Lift = (bHover && bUnlocked) ? 2.f : 0.f;
+		const bool bHover = DrawButton(X, Y, W, H, bSelected ? YJJUI::CardPicked : (bUnlocked ? FLinearColor::White : YJJUI::CardLocked), EAction::ToggleTower, Index, 0, bUnlocked);
+		const float Lift = (bHover && bUnlocked) ? UI().ButtonHoverLift : 0.f;
 		UTexture2D* Texture = TowerTextures[Index][bUnlocked ? 1 : 0];
-		DrawSprite(Texture, FVector2f(X + W * 0.5f, Y + 104.f - Lift), TexSize(Texture) * 0.5f * 1.05f, bUnlocked ? FLinearColor::White : Hex(0x7C7888));
+		DrawSprite(Texture, FVector2f(X + W * 0.5f, Y + IconY - Lift), TexSize(Texture) * UI().TowerCardArtScale, bUnlocked ? FLinearColor::White : YJJUI::IconLocked);
 		if (bUnlocked)
 		{
-			DrawLabel(Def.Name, X + W * 0.5f, Y + 208.f - Lift, 24.f, Ink, EAlign::Center);
+			DrawLabel(YJJLoc::Get(Def.NameKey), X + W * 0.5f, Y + NameY - Lift, UI().CardNameSize, YJJUI::Ink, EAlign::Center, 0.f, W - UI().TextFitPad);
 			if (bSelected)
 			{
-				DrawSprite(CheckIcon, FVector2f(X + W - 26.f, Y + 26.f - Lift), FVector2f(36.f, 36.f));
+				DrawSprite(CheckIcon, FVector2f(X + W - CheckInset, Y + CheckInset - Lift), FVector2f(Check, Check));
 			}
 		}
 		else
 		{
-			DrawSprite(LockIcon, FVector2f(X + W * 0.5f, Y + 104.f), FVector2f(54.f, 54.f));
-			DrawLabel(FString::Printf(TEXT("수집 %d점"), UnlockPoints(true, Index)), X + W * 0.5f, Y + 208.f, 22.f, DarkGray, EAlign::Center);
+			DrawSprite(LockIcon, FVector2f(X + W * 0.5f, Y + IconY), FVector2f(Lock, Lock));
+			DrawLabel(YJJLoc::Format(TEXT("Loadout.UnlockAt"), { UnlockPoints(true, Index) }), X + W * 0.5f, Y + NameY, UI().CardLockedSize, YJJUI::DarkGray, EAlign::Center);
 		}
 
 		if (bHover)
 		{
-			SetTooltip(Def.Name, DescribeTower(Type, 0) + (bUnlocked ? TEXT("") : TEXT("\n수집 점수를 모으면 풀린다")), Ink);
+			FString Body = DescribeTower(Type, 0);
+			if (!bUnlocked)
+			{
+				Body += TEXT("\n");
+				Body += YJJLoc::Get(TEXT("Loadout.LockedHint"));
+			}
+			SetTooltip(YJJLoc::Get(Def.NameKey), Body, YJJUI::Ink);
 		}
 	}
+}
 
-	// ---------------- 진행 상황 ----------------
-	const float CX = 1310.f;
-	const float CW = 540.f;
-	DrawPanel(CX, AY, CW, 600.f, WithAlpha(Cream, 0.97f));
+void AYJJDefenseHUD::DrawLoadoutProgress(const UYJJSaveGame& Save)
+{
+	const FYJJTuning& Tune = YJJData::Tune();
+	const TConstArrayView<FYJJUnlock> Track = YJJData::UnlockTrack();
+	const float CX = UI().ProgressPanelX;
+	const float CW = UI().ProgressPanelW;
+	const float AY = UI().LoadoutPanelY;
+	const float TextX = CX + UI().PanelTitleX;
+	const float Inner = CW - UI().PanelTitleX * 2.f;
+	DrawPanel(CX, AY, CW, UI().LoadoutPanelH, YJJUI::WithAlpha(YJJUI::Cream, UI().PanelAlpha));
 
 	// 도전 단계
-	DrawLabel(TEXT("도전 단계"), CX + 30.f, AY + 40.f, 36.f, Ink);
-	const bool bPrev = Save->SelectedTier > 1;
-	const bool bNext = Save->SelectedTier < Save->MaxTier;
-	DrawButton(CX + 40.f, AY + 78.f, 76.f, 76.f, Sky, EAction::TierPrev, 0, 0, bPrev);
-	DrawSprite(PlayIcon, FVector2f(CX + 78.f, AY + 114.f), FVector2f(34.f, 34.f), FLinearColor::White, 0.f, true);
-	DrawButton(CX + CW - 116.f, AY + 78.f, 76.f, 76.f, Sky, EAction::TierNext, 0, 0, bNext);
-	DrawSprite(PlayIcon, FVector2f(CX + CW - 78.f, AY + 114.f), FVector2f(34.f, 34.f));
-	DrawLabel(FString::Printf(TEXT("%d단계"), Save->SelectedTier), CX + CW * 0.5f, AY + 106.f, 52.f, Ink, EAlign::Center);
-	DrawLabel(Save->SelectedTier == 1 ? FString(TEXT("몬스터 체력 기본")) : FString::Printf(TEXT("몬스터 체력 +%d%%"), FMath::RoundToInt((Save->SelectedTier - 1) * YJJData::TierHPStep * 100.f)),
-		CX + CW * 0.5f, AY + 152.f, 22.f, DarkGray, EAlign::Center);
-	if (!bNext && Save->MaxTier < YJJProgression::MaxTier)
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.Tier")), TextX, AY + UI().PanelTitleY, UI().PanelTitleSize, YJJUI::Ink);
+	const bool bPrev = Save.SelectedTier > 1;
+	const bool bNext = Save.SelectedTier < Save.MaxTier;
+	const float Arrow = UI().TierArrowSize;
+	const float ArrowIcon = UI().TierArrowIcon;
+	const float ArrowY = AY + UI().TierArrowY;
+	const float ArrowInset = UI().TierArrowInset;
+	DrawButton(CX + ArrowInset, ArrowY, Arrow, Arrow, YJJUI::Sky, EAction::TierPrev, 0, 0, bPrev);
+	DrawSprite(PlayIcon, FVector2f(CX + ArrowInset + Arrow * 0.5f, ArrowY + Arrow * 0.5f), FVector2f(ArrowIcon, ArrowIcon), FLinearColor::White, 0.f, true);
+	DrawButton(CX + CW - ArrowInset - Arrow, ArrowY, Arrow, Arrow, YJJUI::Sky, EAction::TierNext, 0, 0, bNext);
+	DrawSprite(PlayIcon, FVector2f(CX + CW - ArrowInset - Arrow * 0.5f, ArrowY + Arrow * 0.5f), FVector2f(ArrowIcon, ArrowIcon));
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.TierValue"), { Save.SelectedTier }), CX + CW * 0.5f, AY + UI().TierValueY, UI().TierValueSize, YJJUI::Ink, EAlign::Center);
+	DrawLabel(Save.SelectedTier == 1 ? YJJLoc::Get(TEXT("Loadout.TierBase"))
+		: YJJLoc::Format(TEXT("Loadout.TierHP"), { Percent((Save.SelectedTier - 1) * Tune.TierHPStep) }),
+		CX + CW * 0.5f, AY + UI().TierHPY, UI().TierHPSize, YJJUI::DarkGray, EAlign::Center);
+	if (!bNext && Save.MaxTier < Tune.MaxTier)
 	{
-		DrawLabel(TEXT("이 단계를 깨면 다음 단계가 열린다"), CX + CW * 0.5f, AY + 182.f, 20.f, Orange, EAlign::Center);
+		DrawLabel(YJJLoc::Get(TEXT("Loadout.TierHint")), CX + CW * 0.5f, AY + UI().TierHintY, UI().TierHintSize, YJJUI::Orange, EAlign::Center);
 	}
 
 	// 수집 점수 → 다음 해금
-	DrawBox(CX + 30.f, AY + 208.f, CW - 60.f, 3.f, Hex(0xE3DCC4));
-	DrawLabel(FString::Printf(TEXT("수집 점수 %d"), Save->Points), CX + 30.f, AY + 244.f, 32.f, Ink);
-	if (Track.IsValidIndex(Save->UnlockIndex))
+	const float DividerH = UI().DividerH;
+	DrawBox(TextX, AY + UI().Divider1Y, Inner, DividerH, YJJUI::Divider);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.Points"), { Save.Points }), TextX, AY + UI().PointsY, UI().PointsSize, YJJUI::Ink);
+	if (Track.IsValidIndex(Save.UnlockIndex))
 	{
-		const FYJJUnlock& Next = Track[Save->UnlockIndex];
-		const int32 Previous = Save->UnlockIndex > 0 ? Track[Save->UnlockIndex - 1].PointsNeeded : 0;
-		const float Fraction = FMath::Clamp(static_cast<float>(Save->Points - Previous) / FMath::Max(Next.PointsNeeded - Previous, 1), 0.f, 1.f);
+		const FYJJUnlock& Next = Track[Save.UnlockIndex];
+		const int32 Previous = Save.UnlockIndex > 0 ? Track[Save.UnlockIndex - 1].PointsNeeded : 0;
+		const float Fraction = FMath::Clamp(static_cast<float>(Save.Points - Previous) / FMath::Max(Next.PointsNeeded - Previous, 1), 0.f, 1.f);
 
-		const float BarX0 = CX + 30.f;
-		const float BarW0 = CW - 160.f;
-		DrawPanel(BarX0, AY + 276.f, BarW0, 40.f, Hex(0x6E6A7C));
-		if (Fraction > 0.02f)
+		const float BarW = CW - UI().ProgressBarRight;
+		const float BarY = AY + UI().ProgressBarY;
+		const float BarH = UI().ProgressBarH;
+		const float Pad = UI().ProgressBarPad;
+		DrawPanel(TextX, BarY, BarW, BarH, YJJUI::DarkGray);
+		if (Fraction > UI().ProgressBarMinFraction)
 		{
-			DrawPanel(BarX0 + 5.f, AY + 281.f, FMath::Max((BarW0 - 10.f) * Fraction, 22.f), 30.f, Green, false);
+			DrawPanel(TextX + Pad, BarY + Pad, FMath::Max((BarW - Pad * 2.f) * Fraction, UI().ProgressBarMinFill), BarH - Pad * 2.f, YJJUI::Green, false);
 		}
-		DrawLabel(FString::Printf(TEXT("%d / %d"), Save->Points, Next.PointsNeeded), BarX0 + BarW0 * 0.5f, AY + 294.f, 22.f, FLinearColor::White, EAlign::Center, 4.f);
+		DrawLabel(YJJLoc::Format(TEXT("Loadout.PointsOf"), { Save.Points, Next.PointsNeeded }), TextX + BarW * 0.5f, BarY + BarH * 0.5f - UI().ProgressTextUp, UI().ProgressTextSize, FLinearColor::White, EAlign::Center, UI().ButtonTextOutline);
 
 		UTexture2D* Icon = Next.bTower ? TowerTextures[Next.Index][0] : RuneTextures[Next.Index];
-		const FVector2f IconSize = Next.bTower ? TexSize(Icon) * 0.32f : FVector2f(72.f, 72.f);
-		DrawSprite(Icon, FVector2f(CX + CW - 76.f, AY + 290.f), IconSize);
-		DrawLabel(FString::Printf(TEXT("다음 수집: %s"), YJJProgression::UnlockName(Next)), CX + 30.f, AY + 342.f, 24.f, DarkGray);
+		const float RuneIcon = UI().NextRuneIcon;
+		const FVector2f IconSize = Next.bTower ? TexSize(Icon) * UI().NextTowerScale : FVector2f(RuneIcon, RuneIcon);
+		DrawSprite(Icon, FVector2f(CX + CW - UI().NextIconRight, AY + UI().NextIconY), IconSize);
+		DrawLabel(YJJLoc::Format(TEXT("Loadout.NextUnlock"), { FYJJProgression::UnlockName(Next) }), TextX, AY + UI().NextUnlockY, UI().NextUnlockSize, YJJUI::DarkGray);
 	}
 	else
 	{
-		DrawLabel(TEXT("전부 모았다! 이제 실력으로 승부"), CX + 30.f, AY + 296.f, 24.f, Orange);
+		DrawLabel(YJJLoc::Get(TEXT("Loadout.AllUnlocked")), TextX, AY + UI().AllUnlockedY, UI().NextUnlockSize, YJJUI::Orange);
 	}
 
 	// 조합 도감
-	DrawBox(CX + 30.f, AY + 374.f, CW - 60.f, 3.f, Hex(0xE3DCC4));
-	const int32 Possible = YJJSpellForge::CountCombos(static_cast<uint32>(Save->UnlockedRunes));
-	DrawLabel(TEXT("조합 도감"), CX + 30.f, AY + 410.f, 32.f, Ink);
-	DrawLabel(FString::Printf(TEXT("%d / %d"), Save->DiscoveredCombos.Num(), Possible), CX + CW - 150.f, AY + 410.f, 36.f, Purple);
-	DrawLabel(FString::Printf(TEXT("룬을 다 모으면 %d가지 · 새 조합을 쓰면 점수 +1"), YJJSpellForge::CountCombos(0x1FF)), CX + 30.f, AY + 448.f, 21.f, DarkGray);
+	DrawBox(TextX, AY + UI().Divider2Y, Inner, DividerH, YJJUI::Divider);
+	const int32 Possible = FYJJSpellForge::CountCombos(static_cast<uint32>(Save.UnlockedRunes));
+	const int32 All = FYJJSpellForge::CountAllCombos();
+	DrawLabel(YJJLoc::Get(TEXT("Loadout.ComboBook")), TextX, AY + UI().ComboTitleY, UI().PointsSize, YJJUI::Ink);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.PointsOf"), { Save.DiscoveredCombos.Num(), Possible }), CX + CW - UI().ComboCountRight, AY + UI().ComboTitleY, UI().ComboCountSize, YJJUI::Purple);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.ComboHint"), { All }),
+		TextX, AY + UI().ComboHintY, UI().ComboHintSize, YJJUI::DarkGray);
 
-	// 발견한 조합을 점으로
-	for (int32 Index = 0; Index < YJJSpellForge::CountCombos(0x1FF); ++Index)
+	// 발견한 조합을 별로
+	const int32 PerRow = FMath::RoundToInt(UI().ComboStarsPerRow);
+	const float Star = UI().ComboStarSize;
+	const float StarHalf = UI().ComboStarHalf;
+	for (int32 Index = 0; Index < All; ++Index)
 	{
-		const float X = CX + 34.f + (Index % 15) * 32.f;
-		const float Y = AY + 470.f + (Index / 15) * 28.f;
-		const bool bFound = Index < Save->DiscoveredCombos.Num();
+		const float X = CX + UI().ComboStarsX + (Index % PerRow) * UI().ComboStarStepX;
+		const float Y = AY + UI().ComboStarsY + (Index / PerRow) * UI().ComboStarStepY;
+		const bool bFound = Index < Save.DiscoveredCombos.Num();
 		const bool bPossible = Index < Possible;
-		DrawSprite(bFound ? StarIcon : StarEmptyIcon, FVector2f(X + 12.f, Y + 12.f), FVector2f(26.f, 26.f), bPossible ? FLinearColor::White : WithAlpha(FLinearColor::White, 0.35f));
+		DrawSprite(bFound ? StarIcon : StarEmptyIcon, FVector2f(X + StarHalf, Y + StarHalf), FVector2f(Star, Star),
+			bPossible ? FLinearColor::White : YJJUI::WithAlpha(FLinearColor::White, UI().ComboStarLockedAlpha));
 	}
-	DrawLabel(FString::Printf(TEXT("플레이 %d판 · 승리 %d번"), Save->RunsPlayed, Save->Wins), CX + 30.f, AY + 572.f, 20.f, DarkGray);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.Record"), { Save.RunsPlayed, Save.Wins }), TextX, AY + UI().RecordY, UI().RecordSize, YJJUI::DarkGray);
+}
 
-	// ---------------- 출전 ----------------
-	const float SW = 420.f;
-	const float SH = 132.f;
-	const float SX = (YJJ::ViewW - SW) * 0.5f;
-	const float SY = 838.f - FMath::Abs(FMath::Sin(UITime * 3.f)) * 8.f;
-	const bool bStartHover = DrawButton(SX, SY, SW, SH, Green, EAction::StartRun);
-	DrawLabel(TEXT("출전!"), YJJ::ViewW * 0.5f, SY + 56.f - (bStartHover ? 2.f : 0.f), 72.f, FLinearColor::White, EAlign::Center, 8.f);
-	DrawLabel(TEXT("엔터 / 스페이스"), YJJ::ViewW * 0.5f, SY + 108.f, 20.f, FLinearColor::White, EAlign::Center, 4.f);
-
-	DrawMapPicker(*Save);
-
+void AYJJDefenseHUD::DrawLoadoutParade(const UYJJSaveGame& Save)
+{
 	// 아래를 줄지어 지나가는 몬스터들 (고른 지도에 나오는 녀석들)
-	const TConstArrayView<EYJJEnemy> Parade = YJJMap::Showcase(Save->SelectedMap);
+	const TArray<EYJJEnemy>& Parade = YJJMap::Def(Save.SelectedMap).Showcase;
+	const float Width = UI().ParadeWidth;
+	const float Fade = UI().ParadeFade;
 	for (int32 Index = 0; Index < Parade.Num(); ++Index)
 	{
-		const float X = FMath::Fmod(UITime * 60.f + Index * (620.f / Parade.Num()), 620.f);
-		const float Alpha = FMath::Clamp(FMath::Min(X, 620.f - X) / 60.f, 0.f, 1.f);
-		const float Scale = YJJData::Enemy(Parade[Index]).bBoss ? 0.5f : 0.9f;
-		DrawSpriteFeet(EnemyTextures[static_cast<int32>(Parade[Index])][FMath::FloorToInt(UITime * 5.f + Index) & 1], FVector2f(40.f + X, 1066.f), FVector2f(Scale, Scale), WithAlpha(FLinearColor::White, Alpha));
+		const float X = FMath::Fmod(UITime * UI().ParadeSpeed + Index * (Width / Parade.Num()), Width);
+		const float Alpha = FMath::Clamp(FMath::Min(X, Width - X) / Fade, 0.f, 1.f);
+		const float Scale = YJJData::Enemy(Parade[Index]).bBoss ? UI().ParadeBossScale : UI().ParadeScale;
+		DrawSpriteFeet(EnemyTextures[static_cast<int32>(Parade[Index])][FMath::FloorToInt(UITime * UI().ParadeFrameRate + Index) % EnemyFrames],
+			FVector2f(UI().ParadeX + X, UI().ParadeY), FVector2f(Scale, Scale), YJJUI::WithAlpha(FLinearColor::White, Alpha));
 	}
-	DrawSpriteFeet(WizardTextures[FMath::FloorToInt(UITime * 1.5f) & 1], FVector2f(1640.f, 1062.f), FVector2f(1.25f, 1.25f));
-	DrawSpriteFeet(SoldierTextures[FMath::FloorToInt(UITime * 4.f) % 3], FVector2f(1500.f, 1050.f), FVector2f(1.3f, 1.3f), FLinearColor::White, true);
-	DrawSpriteFeet(SoldierTextures[FMath::FloorToInt(UITime * 4.f + 1.f) % 3], FVector2f(1430.f, 1056.f), FVector2f(1.3f, 1.3f), FLinearColor::White, true);
+
+	const float WizardScale = UI().ParadeWizardScale;
+	const float SoldierScale = UI().ParadeSoldierScale;
+	const float SoldierRate = UI().ParadeSoldierFrameRate;
+	DrawSpriteFeet(WizardTextures[FMath::FloorToInt(UITime * UI().ParadeWizardFrameRate) % WizardFrames], FVector2f(UI().ParadeWizardX, UI().ParadeWizardY), FVector2f(WizardScale, WizardScale));
+	DrawSpriteFeet(SoldierTextures[FMath::FloorToInt(UITime * SoldierRate) % SoldierFrames], FVector2f(UI().ParadeSoldier1X, UI().ParadeSoldier1Y), FVector2f(SoldierScale, SoldierScale), FLinearColor::White, true);
+	DrawSpriteFeet(SoldierTextures[FMath::FloorToInt(UITime * SoldierRate + 1.f) % SoldierFrames], FVector2f(UI().ParadeSoldier2X, UI().ParadeSoldier2Y), FVector2f(SoldierScale, SoldierScale), FLinearColor::White, true);
 }
 
 void AYJJDefenseHUD::DrawMapPicker(UYJJSaveGame& Save)
 {
-	using namespace YJJUI;
-
 	// 출전 버튼 왼쪽: [<] 지도 그림 [>]
-	const float X = 292.f;
-	const float Y = 818.f;
-	const float W = 436.f;
-	const float H = 176.f;
-	DrawPanel(X, Y, W, H, WithAlpha(Cream, 0.97f));
+	const float X = UI().MapPickerX;
+	const float Y = UI().MapPickerY;
+	const float W = UI().MapPickerW;
+	const float H = UI().MapPickerH;
+	DrawPanel(X, Y, W, H, YJJUI::WithAlpha(YJJUI::Cream, UI().PanelAlpha));
 	AddHit(X, Y, W, H, EAction::Blocker);
 
 	const int32 Map = Save.SelectedMap;
@@ -235,125 +315,175 @@ void AYJJDefenseHUD::DrawMapPicker(UYJJSaveGame& Save)
 	const bool bNext = Map + 1 < Save.UnlockedMaps;
 	const bool bNextLocked = Map + 1 < YJJMap::NumMaps() && !bNext;
 
-	const bool bPrevHover = DrawButton(X + 14.f, Y + 52.f, 56.f, 72.f, Sky, EAction::MapPrev, 0, 0, bPrev);
-	DrawSprite(PlayIcon, FVector2f(X + 42.f, Y + 86.f - (bPrevHover && bPrev ? 2.f : 0.f)), FVector2f(28.f, 28.f), FLinearColor::White, 0.f, true);
-	const bool bNextHover = DrawButton(X + W - 70.f, Y + 52.f, 56.f, 72.f, Sky, EAction::MapNext, 0, 0, bNext);
-	DrawSprite(bNextLocked ? LockIcon : PlayIcon, FVector2f(X + W - 42.f, Y + 86.f - (bNextHover && bNext ? 2.f : 0.f)), FVector2f(28.f, 28.f));
+	const float ArrowW = UI().MapArrowW;
+	const float ArrowH = UI().MapArrowH;
+	const float ArrowInset = UI().MapArrowInset;
+	const float ArrowY = Y + UI().MapArrowY;
+	const float ArrowIcon = UI().MapArrowIcon;
+	const float Lift = UI().ButtonHoverLift;
+	const bool bPrevHover = DrawButton(X + ArrowInset, ArrowY, ArrowW, ArrowH, YJJUI::Sky, EAction::MapPrev, 0, 0, bPrev);
+	DrawSprite(PlayIcon, FVector2f(X + ArrowInset + ArrowW * 0.5f, ArrowY + ArrowH * 0.5f - (bPrevHover && bPrev ? Lift : 0.f)), FVector2f(ArrowIcon, ArrowIcon), FLinearColor::White, 0.f, true);
+	const bool bNextHover = DrawButton(X + W - ArrowInset - ArrowW, ArrowY, ArrowW, ArrowH, YJJUI::Sky, EAction::MapNext, 0, 0, bNext);
+	DrawSprite(bNextLocked ? LockIcon : PlayIcon, FVector2f(X + W - ArrowInset - ArrowW * 0.5f, ArrowY + ArrowH * 0.5f - (bNextHover && bNext ? Lift : 0.f)), FVector2f(ArrowIcon, ArrowIcon));
 
 	// 지도 미리보기 + 이름
-	const float TW = 256.f;
-	const float TH = 120.f;
+	const float TW = UI().MapThumbW;
+	const float TH = UI().MapThumbH;
 	const float TX = X + (W - TW) * 0.5f;
-	const float TY = Y + 14.f;
-	DrawPanel(TX - 6.f, TY - 6.f, TW + 12.f, TH + 12.f, Ink, false);
+	const float TY = Y + UI().MapThumbY;
+	const float Frame = UI().MapThumbFrame;
+	DrawPanel(TX - Frame, TY - Frame, TW + Frame * 2.f, TH + Frame * 2.f, YJJUI::Ink, false);
 	DrawSprite(MapThumb(Map), FVector2f(TX + TW * 0.5f, TY + TH * 0.5f), FVector2f(TW, TH));
-	DrawLabel(FString::Printf(TEXT("%d. %s"), Map + 1, YJJMap::Name(Map)), X + W * 0.5f, Y + H - 26.f, 28.f, Ink, EAlign::Center);
+	DrawLabel(YJJLoc::Format(TEXT("Loadout.MapName"), { Map + 1, YJJMap::Name(Map) }), X + W * 0.5f, Y + H - UI().MapNameUp, UI().MapNameSize, YJJUI::Ink, EAlign::Center, 0.f, W - UI().TextFitPad);
 
 	if (IsHover(TX, TY, TW, TH))
 	{
-		TArray<FString> Names;
-		for (const EYJJEnemy Enemy : YJJMap::Showcase(Map))
+		TArray<FString> Lines;
+		Lines.Add(YJJMap::Desc(Map));
+		for (const EYJJEnemy Enemy : YJJMap::Def(Map).Showcase)
 		{
-			const FString Traits = YJJData::EnemyTraits(Enemy);
-			Names.Add(Traits.IsEmpty() ? FString(YJJData::Enemy(Enemy).Name) : FString::Printf(TEXT("%s (%s)"), YJJData::Enemy(Enemy).Name, *Traits));
+			Lines.Add(DescribeEnemy(Enemy));
 		}
-		SetTooltip(YJJMap::Name(Map), FString(YJJMap::Desc(Map)) + TEXT("\n") + FString::Join(Names, TEXT("\n")), Ink);
+		SetTooltip(YJJMap::Name(Map), FString::Join(Lines, TEXT("\n")), YJJUI::Ink);
 	}
 	else if (bNextHover && bNextLocked)
 	{
-		SetTooltip(FString::Printf(TEXT("%s (잠김)"), YJJMap::Name(Map + 1)), TEXT("앞 지도를 깨면 열린다"), Ink);
+		SetTooltip(YJJLoc::Format(TEXT("Loadout.MapLocked"), { YJJMap::Name(Map + 1) }), YJJLoc::Get(TEXT("Loadout.MapLockedHint")), YJJUI::Ink);
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// 결과
+
+float AYJJDefenseHUD::DrawResultRows(float LineY)
+{
+	const FYJJRunStats& Stats = Game->GetLastStats();
+	const FYJJRunReward& Reward = Game->GetLastReward();
+	const UYJJSaveGame* Save = Game->GetSave();
+	const float X = (YJJ::ViewW - UI().ResultW) * 0.5f;
+	const float W = UI().ResultW;
+	const float LabelX = X + UI().ResultRowX;
+	const float RowStep = UI().ResultRowStep;
+
+	const FString Labels[] = {
+		YJJLoc::Format(TEXT("Result.Waves"), { Stats.WavesCleared, YJJData::NumWaves() }),
+		YJJLoc::Get(TEXT("Result.Victory")),
+		YJJLoc::Format(TEXT("Result.Stars"), { Stats.Stars }),
+		YJJLoc::Format(TEXT("Result.Combos"), { Reward.NewCombos }),
+	};
+	const int32 Points[] = { Reward.WavePoints, Reward.VictoryPoints, Reward.StarPoints, Reward.ComboPoints };
+	constexpr int32 NumRows = UE_ARRAY_COUNT(Points);
+	static_assert(UE_ARRAY_COUNT(Labels) == NumRows, "결과 줄 수가 맞아야 한다");
+
+	for (int32 Row = 0; Row < NumRows; ++Row)
+	{
+		DrawLabel(Labels[Row], LabelX, LineY, UI().ResultRowSize, YJJUI::Ink);
+		DrawLabel(YJJLoc::Format(TEXT("Fx.Gold"), { Points[Row] }), X + W - UI().ResultPointsRight, LineY, UI().ResultPointsSize, Points[Row] > 0 ? YJJUI::Gain : YJJUI::Gray);
+		LineY += RowStep;
+	}
+
+	const float Inset = UI().ResultDividerInset;
+	DrawBox(X + Inset, LineY - UI().ResultDividerUp, W - Inset * 2.f, UI().ResultDividerH, YJJUI::Divider);
+	LineY += UI().ResultTotalGap;
+	DrawLabel(YJJLoc::Get(TEXT("Result.Total")), LabelX, LineY, UI().ResultTotalSize, YJJUI::Ink);
+	DrawLabel(YJJLoc::Format(TEXT("Result.TotalValue"), { Reward.TotalPoints, Save ? Save->Points : 0 }), X + W - UI().ResultTotalRight, LineY, UI().ResultTotalSize, YJJUI::Purple);
+	return LineY + UI().ResultCardsGap;
+}
+
+void AYJJDefenseHUD::DrawResultCards(float LineY)
+{
+	const FYJJRunReward& Reward = Game->GetLastReward();
+	const UYJJSaveGame* Save = Game->GetSave();
+	const float CenterX = YJJ::ViewW * 0.5f;
+	const bool bNewMap = Reward.NewMap != INDEX_NONE;
+
+	if (Reward.NewUnlocks.Num() == 0 && !Reward.bNewTier && !bNewMap)
+	{
+		const TConstArrayView<FYJJUnlock> Track = YJJData::UnlockTrack();
+		if (Save && Track.IsValidIndex(Save->UnlockIndex))
+		{
+			const FYJJUnlock& Next = Track[Save->UnlockIndex];
+			DrawLabel(YJJLoc::Format(TEXT("Result.NextUnlock"), { FYJJProgression::UnlockName(Next), FMath::Max(Next.PointsNeeded - Save->Points, 0) }),
+				CenterX, LineY + UI().ResultNextY, UI().ResultNextSize, YJJUI::DarkGray, EAlign::Center);
+		}
+		return;
+	}
+
+	// 새로 얻은 것
+	const int32 NumCards = Reward.NewUnlocks.Num() + (Reward.bNewTier ? 1 : 0) + (bNewMap ? 1 : 0);
+	const float CardW = UI().ResultCardW;
+	const float CardH = UI().ResultCardH;
+	const float Gap = UI().ResultCardGap;
+	const float Outline = UI().ButtonTextOutline;
+	float CardX = CenterX - (NumCards * CardW + (NumCards - 1) * Gap) * 0.5f;
+	const float Y = LineY - FMath::Abs(FMath::Sin(UITime * UI().ResultCardBounceSpeed)) * UI().ResultCardBounce;
+
+	for (const FYJJUnlock& Unlock : Reward.NewUnlocks)
+	{
+		DrawPanel(CardX, Y, CardW, CardH, YJJUI::CardPicked);
+		UTexture2D* Icon = Unlock.bTower ? TowerTextures[Unlock.Index][0] : RuneTextures[Unlock.Index];
+		const float RuneIcon = UI().ResultRuneIcon;
+		DrawSprite(Icon, FVector2f(CardX + UI().ResultCardIconX, Y + CardH * 0.5f), Unlock.bTower ? TexSize(Icon) * UI().ResultTowerScale : FVector2f(RuneIcon, RuneIcon));
+		DrawLabel(YJJLoc::Get(TEXT("Result.NewItem")), CardX + UI().ResultCardTextX, Y + UI().ResultCardLine1, UI().ResultCardSmall, YJJUI::Orange);
+		DrawLabel(FYJJProgression::UnlockName(Unlock), CardX + UI().ResultCardTextX, Y + UI().ResultCardLine2, UI().ResultCardName, YJJUI::Ink, EAlign::Left, 0.f, CardW - UI().ResultCardTextX - UI().TextFitPad);
+		CardX += CardW + Gap;
+	}
+	if (bNewMap)
+	{
+		const float Inset = UI().ResultMapInset;
+		const float FrameW = UI().ResultMapFrameW;
+		const float FrameH = UI().ResultMapFrameH;
+		const float ThumbPad = UI().ResultMapThumbPad;
+		DrawPanel(CardX, Y, CardW, CardH, YJJUI::Green);
+		DrawPanel(CardX + Inset, Y + Inset, FrameW, FrameH, FLinearColor::White, false);
+		DrawSprite(MapThumb(Reward.NewMap), FVector2f(CardX + Inset + FrameW * 0.5f, Y + Inset + FrameH * 0.5f), FVector2f(FrameW - ThumbPad * 2.f, FrameH - ThumbPad * 2.f));
+		DrawLabel(YJJLoc::Get(TEXT("Result.NewMap")), CardX + UI().ResultMapTextX, Y + UI().ResultMapTextY, UI().ResultCardName, FLinearColor::White, EAlign::Left, Outline);
+		DrawLabel(YJJMap::Name(Reward.NewMap), CardX + CardW * 0.5f, Y + UI().ResultMapNameY, UI().ResultMapNameSize, FLinearColor::White, EAlign::Center, Outline);
+		CardX += CardW + Gap;
+	}
+	if (Reward.bNewTier)
+	{
+		DrawPanel(CardX, Y, CardW, CardH, YJJUI::Sky);
+		DrawLabel(YJJLoc::Get(TEXT("Result.NewTier")), CardX + CardW * 0.5f, Y + UI().ResultCardLine1, UI().ResultTierLabelSize, FLinearColor::White, EAlign::Center, Outline);
+		DrawLabel(YJJLoc::Format(TEXT("Loadout.TierValue"), { Save ? Save->MaxTier : 0 }), CardX + CardW * 0.5f, Y + UI().ResultTierValueY, UI().ResultTierValueSize, FLinearColor::White, EAlign::Center, UI().ResultTierOutline);
 	}
 }
 
 void AYJJDefenseHUD::DrawResult()
 {
 	const FYJJRunStats& Stats = Game->GetLastStats();
-	const FYJJRunReward& Reward = Game->GetLastReward();
-	const UYJJSaveGame* Save = Game->GetSave();
-	using namespace YJJUI;
 
-	DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, WithAlpha(Ink, 0.55f));
+	DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, UI().ResultDim));
 
-	const float W = 860.f;
-	const float H = 860.f;
+	const float W = UI().ResultW;
+	const float H = UI().ResultH;
 	const float X = (YJJ::ViewW - W) * 0.5f;
-	const float Y = 110.f;
-	DrawPanel(X, Y, W, H, Cream);
+	const float Y = UI().ResultY;
+	DrawPanel(X, Y, W, H, YJJUI::Cream);
 	AddHit(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, EAction::Blocker);
 
 	const float CenterX = YJJ::ViewW * 0.5f;
-	DrawLabel(Stats.bVictory ? TEXT("막아냈다!") : TEXT("성문이 뚫렸다..."), CenterX, Y + 70.f, 76.f, Stats.bVictory ? Hex(0x3E9B2B) : Red, EAlign::Center);
-	DrawLabel(FString::Printf(TEXT("%s · %d단계"), YJJMap::Name(Stats.Map), Stats.Tier), CenterX, Y + 128.f, 26.f, DarkGray, EAlign::Center);
+	DrawLabel(Stats.bVictory ? YJJLoc::Get(TEXT("Banner.Victory")) : YJJLoc::Get(TEXT("Banner.Defeat")),
+		CenterX, Y + UI().ResultTitleY, UI().ResultTitleSize, Stats.bVictory ? YJJUI::Gain : YJJUI::Red, EAlign::Center);
+	DrawLabel(YJJLoc::Format(TEXT("Top.MapTier"), { YJJMap::Name(Stats.Map), Stats.Tier }), CenterX, Y + UI().ResultMapY, UI().ResultMapSize, YJJUI::DarkGray, EAlign::Center);
 
-	// 별: 하나씩 통통 튀며 나타난다
-	for (int32 Index = 0; Index < 3; ++Index)
+	// 별: 하나씩 흔들거린다 (가운데 별이 조금 위)
+	const float Star = UI().ResultStarSize;
+	for (int32 Index = 0; Index < FYJJDefenseSim::ThreeStars; ++Index)
 	{
 		const bool bEarned = Index < Stats.Stars;
-		const float Wobble = bEarned ? FMath::Sin(UITime * 4.f + Index) * 6.f : 0.f;
-		DrawSprite(bEarned ? StarIcon : StarEmptyIcon, FVector2f(CenterX + (Index - 1) * 130.f, Y + 216.f - (Index == 1 ? 14.f : 0.f)), FVector2f(116.f, 116.f), FLinearColor::White, Wobble);
+		const bool bMiddle = Index == FYJJDefenseSim::ThreeStars / 2;
+		const float Wobble = bEarned ? FMath::Sin(UITime * UI().ResultStarWobbleSpeed + Index) * UI().ResultStarWobble : 0.f;
+		const FVector2f Pos(CenterX + (Index - FYJJDefenseSim::ThreeStars / 2) * UI().ResultStarStep, Y + UI().ResultStarY - (bMiddle ? UI().ResultStarMiddleUp : 0.f));
+		DrawSprite(bEarned ? StarIcon : StarEmptyIcon, Pos, FVector2f(Star, Star), FLinearColor::White, Wobble);
 	}
 
-	// 수집 점수 내역
-	float LineY = Y + 318.f;
-	auto Row = [this, X, W, &LineY](const FString& Label, int32 Points)
-	{
-		DrawLabel(Label, X + 120.f, LineY, 30.f, YJJUI::Ink);
-		DrawLabel(FString::Printf(TEXT("+%d"), Points), X + W - 200.f, LineY, 32.f, Points > 0 ? YJJUI::Hex(0x3E9B2B) : YJJUI::Gray);
-		LineY += 46.f;
-	};
-	Row(FString::Printf(TEXT("버틴 웨이브 %d/%d"), Stats.WavesCleared, YJJData::NumWaves()), Reward.WavePoints);
-	Row(TEXT("승리"), Reward.VictoryPoints);
-	Row(FString::Printf(TEXT("별 %d개"), Stats.Stars), Reward.StarPoints);
-	Row(FString::Printf(TEXT("새로 발견한 조합 %d가지"), Reward.NewCombos), Reward.ComboPoints);
-	DrawBox(X + 110.f, LineY - 14.f, W - 220.f, 4.f, Hex(0xE3DCC4));
-	LineY += 16.f;
-	DrawLabel(TEXT("수집 점수"), X + 120.f, LineY, 36.f, Ink);
-	DrawLabel(FString::Printf(TEXT("+%d  (총 %d)"), Reward.TotalPoints, Save ? Save->Points : 0), X + W - 330.f, LineY, 36.f, Purple);
-	LineY += 62.f;
+	const float LineY = DrawResultRows(Y + UI().ResultRowsY);
+	DrawResultCards(LineY);
 
-	// 새로 얻은 것
-	const bool bNewMap = Reward.NewMap != INDEX_NONE;
-	if (Reward.NewUnlocks.Num() > 0 || Reward.bNewTier || bNewMap)
-	{
-		const int32 NumCards = Reward.NewUnlocks.Num() + (Reward.bNewTier ? 1 : 0) + (bNewMap ? 1 : 0);
-		const float CardW = 250.f;
-		const float CardH = 150.f;
-		float CardX = CenterX - (NumCards * CardW + (NumCards - 1) * 16.f) * 0.5f;
-		const float Bounce = FMath::Abs(FMath::Sin(UITime * 4.f)) * 6.f;
-
-		for (const FYJJUnlock& Unlock : Reward.NewUnlocks)
-		{
-			DrawPanel(CardX, LineY - Bounce, CardW, CardH, Hex(0xFFE98A));
-			UTexture2D* Icon = Unlock.bTower ? TowerTextures[Unlock.Index][0] : RuneTextures[Unlock.Index];
-			DrawSprite(Icon, FVector2f(CardX + 62.f, LineY + CardH * 0.5f - Bounce), Unlock.bTower ? TexSize(Icon) * 0.4f : FVector2f(86.f, 86.f));
-			DrawLabel(TEXT("새로 얻었다!"), CardX + 118.f, LineY + 52.f - Bounce, 22.f, Orange);
-			DrawLabel(YJJProgression::UnlockName(Unlock), CardX + 118.f, LineY + 90.f - Bounce, 26.f, Ink);
-			CardX += CardW + 16.f;
-		}
-		if (bNewMap)
-		{
-			DrawPanel(CardX, LineY - Bounce, CardW, CardH, Green);
-			DrawPanel(CardX + 14.f, LineY + 14.f - Bounce, 112.f, 66.f, FLinearColor::White, false);
-			DrawSprite(MapThumb(Reward.NewMap), FVector2f(CardX + 70.f, LineY + 47.f - Bounce), FVector2f(104.f, 58.f));
-			DrawLabel(TEXT("새 지도!"), CardX + 136.f, LineY + 46.f - Bounce, 26.f, FLinearColor::White, EAlign::Left, 4.f);
-			DrawLabel(YJJMap::Name(Reward.NewMap), CardX + CardW * 0.5f, LineY + 116.f - Bounce, 28.f, FLinearColor::White, EAlign::Center, 4.f);
-			CardX += CardW + 16.f;
-		}
-		if (Reward.bNewTier)
-		{
-			DrawPanel(CardX, LineY - Bounce, CardW, CardH, Sky);
-			DrawLabel(TEXT("다음 단계 열림"), CardX + CardW * 0.5f, LineY + 52.f - Bounce, 24.f, FLinearColor::White, EAlign::Center, 4.f);
-			DrawLabel(FString::Printf(TEXT("%d단계"), Save ? Save->MaxTier : 0), CardX + CardW * 0.5f, LineY + 96.f - Bounce, 40.f, FLinearColor::White, EAlign::Center, 5.f);
-		}
-	}
-	else if (Save && YJJProgression::UnlockTrack().IsValidIndex(Save->UnlockIndex))
-	{
-		const FYJJUnlock& Next = YJJProgression::UnlockTrack()[Save->UnlockIndex];
-		DrawLabel(FString::Printf(TEXT("다음 수집 \"%s\"까지 %d점"), YJJProgression::UnlockName(Next), FMath::Max(Next.PointsNeeded - Save->Points, 0)), CenterX, LineY + 60.f, 28.f, DarkGray, EAlign::Center);
-	}
-
-	const float BW = 320.f;
-	const float BH = 96.f;
-	const bool bHover = DrawButton(CenterX - BW * 0.5f, Y + H - BH - 28.f, BW, BH, Green, EAction::ResultContinue);
-	DrawLabel(TEXT("한 판 더"), CenterX, Y + H - BH * 0.5f - 32.f - (bHover ? 2.f : 0.f), 48.f, FLinearColor::White, EAlign::Center, 6.f);
+	const float BW = UI().ResultButtonW;
+	const float BH = UI().ResultButtonH;
+	const float BY = Y + H - BH - UI().ResultButtonBottom;
+	const bool bHover = DrawButton(CenterX - BW * 0.5f, BY, BW, BH, YJJUI::Green, EAction::ResultContinue);
+	DrawLabel(YJJLoc::Get(TEXT("Result.Again")), CenterX, BY + BH * 0.5f - UI().ResultButtonTextUp - (bHover ? UI().ButtonHoverLift : 0.f), UI().ResultButtonSize, FLinearColor::White, EAlign::Center, UI().ResultButtonOutline);
 }
