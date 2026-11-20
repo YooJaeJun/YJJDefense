@@ -177,9 +177,12 @@ struct YJJDEFENSE_API FYJJRunConfig
 {
 	FYJJRunConfig();
 
+	/** 테스트·봇이 쓰는 기본 난수 씨앗 (게임은 Tuning.csv 의 RunSeedBase + 판 수) */
+	static constexpr int32 DefaultSeed = 1;
+
 	int32 Map = 0;
 	int32 Tier = 1;
-	int32 Seed = 0;
+	int32 Seed = DefaultSeed;
 	uint32 RuneMask = 0;    // 들고 나온 룬 (비트 = EYJJRune)
 	uint32 TowerMask = 0;   // 들고 나온 병졸 (비트 = EYJJTower)
 	EYJJRune Disks[YJJ::NumDisks][YJJ::NumSockets];

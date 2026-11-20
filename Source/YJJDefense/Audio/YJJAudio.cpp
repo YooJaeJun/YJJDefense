@@ -1,49 +1,45 @@
 #include "Audio/YJJAudio.h"
 #include "Engine/World.h"
+#include "Game/YJJGameData.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 
-namespace YJJAudio
+TMap<FName, double> FYJJAudio::LastPlayed;
+
+USoundBase* FYJJAudio::LoadSound(const FString& Name)
 {
-	namespace
-	{
-		constexpr double MinInterval = 0.06;
+	const FString Path = FString::Printf(TEXT("%s/%s.%s"), AudioFolder, *Name, *Name);
+	return LoadObject<USoundBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
 
-		USoundBase* LoadSound(const TCHAR* Name)
-		{
-			const FString Path = FString::Printf(TEXT("/Game/YJJDefense/Audio/%s.%s"), Name, Name);
-			return LoadObject<USoundBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
-		}
+void FYJJAudio::Play(const UObject* WorldContext, FName Key)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const FYJJSoundDef* Def = YJJData::Sound(Key);
+	if (!World || !Def)
+	{
+		return;
 	}
 
-	void Play(const UObject* WorldContext, const TCHAR* Name, float Volume, float Pitch)
+	const FName SoundName(*Def->Sound);
+	const double Now = World->GetRealTimeSeconds();
+	if (const double* Last = LastPlayed.Find(SoundName); Last && Now >= *Last && Now - *Last < YJJData::Tune().SoundMinInterval)
 	{
-		const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
-		if (!World)
-		{
-			return;
-		}
-
-		static TMap<FName, double> LastPlayed;
-		const double Now = World->GetRealTimeSeconds();
-		double& Last = LastPlayed.FindOrAdd(FName(Name), -1.0);
-		if (Now >= Last && Now - Last < MinInterval)
-		{
-			return;
-		}
-		Last = Now;
-
-		if (USoundBase* Sound = LoadSound(Name))
-		{
-			UGameplayStatics::PlaySound2D(WorldContext, Sound, Volume, Pitch);
-		}
+		return;
 	}
+	LastPlayed.Add(SoundName, Now);
 
-	void StartBgm(const UObject* WorldContext, float Volume)
+	if (USoundBase* Sound = LoadSound(Def->Sound))
 	{
-		if (USoundBase* Bgm = LoadSound(TEXT("BGM_Meadow")))
-		{
-			UGameplayStatics::SpawnSound2D(WorldContext, Bgm, Volume);
-		}
+		UGameplayStatics::PlaySound2D(WorldContext, Sound, Def->Volume);
+	}
+}
+
+void FYJJAudio::StartMusic(const UObject* WorldContext)
+{
+	const FYJJSoundDef* Def = YJJData::Sound(MusicKey);
+	if (USoundBase* Music = Def ? LoadSound(Def->Sound) : nullptr)
+	{
+		UGameplayStatics::SpawnSound2D(WorldContext, Music, Def->Volume);
 	}
 }

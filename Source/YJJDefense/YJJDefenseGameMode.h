@@ -4,6 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "Game/YJJAutoPlayer.h"
 #include "Game/YJJDefenseSim.h"
+#include "HAL/IConsoleManager.h"
 #include "Meta/YJJSaveGame.h"
 #include "Tests/YJJUITestDriver.h"
 #include "YJJDefenseGameMode.generated.h"
@@ -34,6 +35,7 @@ public:
 	EYJJScreen GetScreen() const { return Screen; }
 	bool IsBattlePaused() const { return bBattlePaused; }
 	float GetSpeed() const { return Speed; }
+	bool IsFast() const { return Speed > 1.f; }
 	const FYJJRunReward& GetLastReward() const { return LastReward; }
 	const FYJJRunStats& GetLastStats() const { return LastStats; }
 
@@ -51,6 +53,9 @@ private:
 	void DispatchEvents();
 	void TickAutoPlay(float DeltaSeconds);
 	AYJJDefenseHUD* GetDefenseHUD() const;
+	static void TakeShot(const FString& Name);
+	/** Sounds.csv 행 이름: 사건 이름, 투사체가 있는 사건은 사건_투사체 */
+	static FName SoundKey(const FYJJSimEvent& Event);
 
 	FYJJDefenseSim Sim;
 	FYJJAutoPlayer AutoPlayer;
@@ -78,4 +83,20 @@ private:
 	int32 AutoPlayShotIndex = 0;
 	int32 AutoPlayRuns = 0;
 	bool bAutoPlayResultShot = false;
+
+	// 오토플레이 진행 시각 (테스트 도구라 데이터 표가 아니라 여기에 둔다)
+	static constexpr float AutoPlayLoadoutShotTime = 1.5f;
+	static constexpr float AutoPlayStartTime = 2.5f;
+	static constexpr float AutoPlayResultShotTime = 1.5f;
+	static constexpr float AutoPlayResultLeaveTime = 3.f;
+	static constexpr float AutoPlayReportInterval = 20.f;
+	static constexpr int32 AutoPlayMaxShots = 12;
+	static constexpr float AutoPlayFirstShotShare = 0.5f;   // 첫 전투 스크린샷 = 간격 x 이것
+
+	static TAutoConsoleVariable<int32> CVarAutoPlay;
+	static TAutoConsoleVariable<float> CVarAutoPlaySpeed;
+	static TAutoConsoleVariable<int32> CVarAutoPlayExit;
+	static TAutoConsoleVariable<int32> CVarAutoPlayMap;
+	static TAutoConsoleVariable<float> CVarAutoPlayShotInterval;
+	static TAutoConsoleVariable<int32> CVarUITest;
 };

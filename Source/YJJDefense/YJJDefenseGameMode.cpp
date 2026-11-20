@@ -2,47 +2,35 @@
 #include "Audio/YJJAudio.h"
 #include "Game/YJJGameData.h"
 #include "GameFramework/PlayerController.h"
-#include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
 #include "Player/YJJDefensePlayerController.h"
 #include "UI/YJJDefenseHUD.h"
 #include "UnrealClient.h"
+#include "YJJDefense.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogYJJDefense, Log, All);
-
-static TAutoConsoleVariable<int32> CVarAutoPlay(
+TAutoConsoleVariable<int32> AYJJDefenseGameMode::CVarAutoPlay(
 	TEXT("yjj.AutoPlay"), 0,
 	TEXT("1이면 봇이 병졸을 짓고 스펠을 조합해 쏘며 한 판을 플레이한다 (스모크 테스트용)"));
 
-static TAutoConsoleVariable<float> CVarAutoPlaySpeed(
+TAutoConsoleVariable<float> AYJJDefenseGameMode::CVarAutoPlaySpeed(
 	TEXT("yjj.AutoPlaySpeed"), 3.f,
 	TEXT("오토플레이 중 게임 배속"));
 
-static TAutoConsoleVariable<int32> CVarAutoPlayExit(
+TAutoConsoleVariable<int32> AYJJDefenseGameMode::CVarAutoPlayExit(
 	TEXT("yjj.AutoPlayExit"), 0,
 	TEXT("1 이상이면 오토플레이로 그 판 수만큼 끝낸 뒤 스크린샷을 남기고 게임을 종료한다"));
 
-static TAutoConsoleVariable<int32> CVarAutoPlayMap(
-	TEXT("yjj.AutoPlayMap"), -1,
+TAutoConsoleVariable<int32> AYJJDefenseGameMode::CVarAutoPlayMap(
+	TEXT("yjj.AutoPlayMap"), INDEX_NONE,
 	TEXT("0 이상이면 오토플레이가 이 지도로 출전한다 (잠겨 있어도 연다)"));
 
-static TAutoConsoleVariable<float> CVarAutoPlayShotInterval(
+TAutoConsoleVariable<float> AYJJDefenseGameMode::CVarAutoPlayShotInterval(
 	TEXT("yjj.AutoPlayShotInterval"), 45.f,
 	TEXT("오토플레이 중 스크린샷 간격 (게임 시간 초). 0이면 찍지 않는다"));
 
-static TAutoConsoleVariable<int32> CVarUITest(
+TAutoConsoleVariable<int32> AYJJDefenseGameMode::CVarUITest(
 	TEXT("yjj.UITest"), 0,
 	TEXT("1이면 마우스 조작을 흉내 내는 UI 테스트를 돌리고 게임을 종료한다 (Tools/RunUITest.ps1)"));
-
-namespace
-{
-	void TakeShot(const FString& Name)
-	{
-		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / (Name + TEXT(".png"));
-		FScreenshotRequest::RequestScreenshot(Path, true, false);
-		UE_LOG(LogYJJDefense, Display, TEXT("[AutoPlay] screenshot %s"), *Path);
-	}
-}
 
 AYJJDefenseGameMode::AYJJDefenseGameMode()
 {
@@ -52,14 +40,21 @@ AYJJDefenseGameMode::AYJJDefenseGameMode()
 	HUDClass = AYJJDefenseHUD::StaticClass();
 }
 
+void AYJJDefenseGameMode::TakeShot(const FString& Name)
+{
+	const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / (Name + TEXT(".png"));
+	FScreenshotRequest::RequestScreenshot(Path, true, false);
+	UE_LOG(LogYJJDefense, Display, TEXT("[AutoPlay] screenshot %s"), *Path);
+}
+
 void AYJJDefenseGameMode::StartPlay()
 {
-	SaveGame = YJJProgression::LoadOrCreate();
+	SaveGame = FYJJProgression::LoadOrCreate();
 	Sim.Reset(FYJJRunConfig());
 
 	Super::StartPlay();
 
-	YJJAudio::StartBgm(this);
+	FYJJAudio::StartMusic(this);
 }
 
 AYJJDefenseHUD* AYJJDefenseGameMode::GetDefenseHUD() const
@@ -79,12 +74,12 @@ void AYJJDefenseGameMode::StartRun()
 	{
 		return;
 	}
-	YJJProgression::SanitizeSelection(*SaveGame);
+	FYJJProgression::SanitizeSelection(*SaveGame);
 
 	FYJJRunConfig Config;
 	Config.Map = SaveGame->SelectedMap;
 	Config.Tier = SaveGame->SelectedTier;
-	Config.Seed = 1000 + SaveGame->RunsPlayed;
+	Config.Seed = YJJData::Tune().RunSeedBase + SaveGame->RunsPlayed;
 	Config.RuneMask = static_cast<uint32>(SaveGame->SelectedRunes);
 	Config.TowerMask = static_cast<uint32>(SaveGame->SelectedTowers);
 
@@ -113,14 +108,14 @@ void AYJJDefenseGameMode::StartRun()
 		HUD->OnRunStarted();
 	}
 	UE_LOG(LogYJJDefense, Display, TEXT("[Run] start map=%d tier=%d runes=0x%X towers=0x%X"), Config.Map, Config.Tier, Config.RuneMask, Config.TowerMask);
-	YJJAudio::Play(this, TEXT("SFX_Click"));
+	FYJJAudio::Play(this, FYJJAudio::ClickKey);
 	SaveProgress();
 }
 
 void AYJJDefenseGameMode::ReturnToLoadout()
 {
 	Screen = EYJJScreen::Loadout;
-	YJJAudio::Play(this, TEXT("SFX_Click"));
+	FYJJAudio::Play(this, FYJJAudio::ClickKey);
 }
 
 void AYJJDefenseGameMode::TogglePause()
@@ -133,12 +128,12 @@ void AYJJDefenseGameMode::TogglePause()
 
 void AYJJDefenseGameMode::ToggleSpeed()
 {
-	Speed = Speed > 1.5f ? 1.f : 2.f;
+	Speed = IsFast() ? 1.f : YJJData::Tune().FastSpeed;
 }
 
 void AYJJDefenseGameMode::SaveProgress()
 {
-	YJJProgression::Save(SaveGame);
+	FYJJProgression::Save(SaveGame);
 }
 
 void AYJJDefenseGameMode::FinishRun()
@@ -162,7 +157,7 @@ void AYJJDefenseGameMode::FinishRun()
 				SaveGame->LastDisks.Add(static_cast<uint8>(Rune));
 			}
 		}
-		LastReward = YJJProgression::ApplyRun(*SaveGame, LastStats);
+		LastReward = FYJJProgression::ApplyRun(*SaveGame, LastStats);
 		SaveProgress();
 	}
 
@@ -200,7 +195,7 @@ void AYJJDefenseGameMode::Tick(float DeltaSeconds)
 	{
 		// 승패 연출을 잠깐 보여 준 뒤 결과 화면으로
 		ResultDelay += DeltaSeconds;
-		if (ResultDelay >= 2.2f)
+		if (ResultDelay >= YJJData::Tune().ResultDelay)
 		{
 			FinishRun();
 		}
@@ -213,7 +208,7 @@ void AYJJDefenseGameMode::Tick(float DeltaSeconds)
 	}
 
 	// 고정 스텝. 프레임이 튀어도 한 번에 너무 많이 돌리지 않는다
-	StepAccumulator = FMath::Min(StepAccumulator + DeltaSeconds * Speed, 0.25f);
+	StepAccumulator = FMath::Min(StepAccumulator + DeltaSeconds * Speed, YJJData::Tune().MaxStepBacklog);
 	while (StepAccumulator >= FYJJDefenseSim::FixedStep)
 	{
 		StepAccumulator -= FYJJDefenseSim::FixedStep;
@@ -224,6 +219,17 @@ void AYJJDefenseGameMode::Tick(float DeltaSeconds)
 		Sim.Step();
 	}
 	DispatchEvents();
+}
+
+FName AYJJDefenseGameMode::SoundKey(const FYJJSimEvent& Event)
+{
+	const FString EventName = StaticEnum<EYJJSimEvent>()->GetNameStringByValue(static_cast<int64>(Event.Type));
+	if (Event.Type == EYJJSimEvent::TowerFired || Event.Type == EYJJSimEvent::ProjectileHit)
+	{
+		const FString Projectile = StaticEnum<EYJJProjectile>()->GetNameStringByValue(Event.Int);
+		return FName(*FString::Printf(TEXT("%s_%s"), *EventName, *Projectile));
+	}
+	return FName(*EventName);
 }
 
 void AYJJDefenseGameMode::DispatchEvents()
@@ -240,41 +246,14 @@ void AYJJDefenseGameMode::DispatchEvents()
 
 	for (const FYJJSimEvent& Event : Sim.Events)
 	{
-		switch (Event.Type)
+		FYJJAudio::Play(this, SoundKey(Event));
+		if (Event.Type == EYJJSimEvent::TowerBuilt)
 		{
-		case EYJJSimEvent::EnemyKilled: YJJAudio::Play(this, TEXT("SFX_Pop"), 0.7f); break;
-		case EYJJSimEvent::EnemyLeaked: YJJAudio::Play(this, TEXT("SFX_Leak")); break;
-		case EYJJSimEvent::TowerBuilt:
 			UE_LOG(LogYJJDefense, Display, TEXT("[Battle] tower built at (%.0f, %.0f) gold=%d"), Event.Pos.X, Event.Pos.Y, Sim.Gold);
-			YJJAudio::Play(this, TEXT("SFX_Build"));
-			break;
-		case EYJJSimEvent::TowerUpgraded:
-		case EYJJSimEvent::WizardUpgraded: YJJAudio::Play(this, TEXT("SFX_Build")); break;
-		case EYJJSimEvent::TowerSold: YJJAudio::Play(this, TEXT("SFX_Coin")); break;
-		case EYJJSimEvent::TowerFired:
-			YJJAudio::Play(this, Event.Int == static_cast<int32>(EYJJProjectile::Arrow) ? TEXT("SFX_Arrow")
-				: (Event.Int == static_cast<int32>(EYJJProjectile::Bomb) ? TEXT("SFX_Cannon") : TEXT("SFX_Magic")), 0.5f);
-			break;
-		case EYJJSimEvent::ProjectileHit:
-			if (Event.Int == static_cast<int32>(EYJJProjectile::Bomb))
-			{
-				YJJAudio::Play(this, TEXT("SFX_Boom"), 0.7f);
-			}
-			break;
-		case EYJJSimEvent::SpellCast: YJJAudio::Play(this, TEXT("SFX_Cast")); break;
-		case EYJJSimEvent::SpellImpact: YJJAudio::Play(this, TEXT("SFX_Boom"), 0.9f); break;
-		case EYJJSimEvent::Reaction: YJJAudio::Play(this, TEXT("SFX_Reaction")); break;
-		case EYJJSimEvent::ChainArc:
-		case EYJJSimEvent::SkyBolt: YJJAudio::Play(this, TEXT("SFX_Zap"), 0.8f); break;
-		case EYJJSimEvent::MeleeHit: YJJAudio::Play(this, TEXT("SFX_Hit"), 0.4f); break;
-		case EYJJSimEvent::WaveStarted:
+		}
+		else if (Event.Type == EYJJSimEvent::WaveStarted)
+		{
 			UE_LOG(LogYJJDefense, Display, TEXT("[Battle] wave %d started lives=%d gold=%d"), Event.Int + 1, Sim.Lives, Sim.Gold);
-			YJJAudio::Play(this, TEXT("SFX_Horn"));
-			break;
-		case EYJJSimEvent::WaveBonus: YJJAudio::Play(this, TEXT("SFX_Coin")); break;
-		case EYJJSimEvent::Victory: YJJAudio::Play(this, TEXT("SFX_Victory")); break;
-		case EYJJSimEvent::Defeat: YJJAudio::Play(this, TEXT("SFX_Defeat")); break;
-		default: break;
 		}
 	}
 	Sim.Events.Reset();
@@ -290,12 +269,12 @@ void AYJJDefenseGameMode::TickAutoPlay(float DeltaSeconds)
 	{
 	case EYJJScreen::Loadout:
 		// 준비 화면을 한 장 찍고 출전
-		if (AutoPlayScreenTime > 1.5f && AutoPlayShotIndex == 0)
+		if (AutoPlayScreenTime > AutoPlayLoadoutShotTime && AutoPlayShotIndex == 0)
 		{
 			TakeShot(TEXT("AutoPlay_Loadout"));
 			AutoPlayShotIndex = 1;
 		}
-		if (AutoPlayScreenTime > 2.5f)
+		if (AutoPlayScreenTime > AutoPlayStartTime)
 		{
 			const int32 ForcedMap = CVarAutoPlayMap.GetValueOnGameThread();
 			if (SaveGame && ForcedMap >= 0)
@@ -316,12 +295,13 @@ void AYJJDefenseGameMode::TickAutoPlay(float DeltaSeconds)
 		Speed = CVarAutoPlaySpeed.GetValueOnGameThread();
 		if (Sim.Time >= AutoPlayNextReport)
 		{
-			AutoPlayNextReport += 20.f;
+			AutoPlayNextReport += AutoPlayReportInterval;
 			UE_LOG(LogYJJDefense, Display, TEXT("[AutoPlay] t=%.0f wave=%d/%d lives=%d gold=%d enemies=%d kills=%d casts=%d reactions=%d combos=%d"),
 				Sim.Time, Sim.WaveIndex + 1, YJJData::NumWaves(), Sim.Lives, Sim.Gold, Sim.Enemies.Num(), Sim.Kills, Sim.SpellsCast, Sim.Reactions, Sim.CombosCast.Num());
 		}
 		const float Interval = CVarAutoPlayShotInterval.GetValueOnGameThread();
-		if (Interval > 0.f && AutoPlayRuns == 0 && Sim.Time >= Interval * AutoPlayShotIndex - Interval * 0.5f && AutoPlayShotIndex < 12)
+		if (Interval > 0.f && AutoPlayRuns == 0 && AutoPlayShotIndex < AutoPlayMaxShots
+			&& Sim.Time >= Interval * AutoPlayShotIndex - Interval * AutoPlayFirstShotShare)
 		{
 			TakeShot(FString::Printf(TEXT("AutoPlay_Battle_%d"), AutoPlayShotIndex));
 			AutoPlayShotIndex++;
@@ -331,12 +311,12 @@ void AYJJDefenseGameMode::TickAutoPlay(float DeltaSeconds)
 	}
 
 	case EYJJScreen::Result:
-		if (AutoPlayScreenTime > 1.5f && !bAutoPlayResultShot)
+		if (AutoPlayScreenTime > AutoPlayResultShotTime && !bAutoPlayResultShot)
 		{
 			bAutoPlayResultShot = true;
 			TakeShot(FString::Printf(TEXT("AutoPlay_Result_%d"), AutoPlayRuns));
 		}
-		if (AutoPlayScreenTime > 3.f)
+		if (AutoPlayScreenTime > AutoPlayResultLeaveTime)
 		{
 			AutoPlayRuns++;
 			if (ExitAfterRuns > 0 && AutoPlayRuns >= ExitAfterRuns)
@@ -346,7 +326,8 @@ void AYJJDefenseGameMode::TickAutoPlay(float DeltaSeconds)
 				return;
 			}
 			ReturnToLoadout();
-			AutoPlayScreenTime = 1.6f;   // 두 번째 판부터는 준비 화면을 다시 찍지 않는다
+			// 두 번째 판부터는 준비 화면을 다시 찍지 않는다
+			AutoPlayScreenTime = AutoPlayLoadoutShotTime;
 		}
 		break;
 	}

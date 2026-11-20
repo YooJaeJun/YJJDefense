@@ -12,5 +12,5 @@ CocoKid,Enemy.CocoKid.Name,CocoKid,34,100,0,0,3,1,False,False,3,0.8,15,0,None,0,
 KingCrab,Enemy.KingCrab.Name,KingCrab,3200,24,0.6,0.15,260,20,False,True,45,1.6,52,0,None,0,None,해변 보스
 Snowman,Enemy.Snowman.Name,Snowman,170,46,0.1,0.1,10,1,False,False,6,1.2,24,0,Snowball,2,None,녹으면 눈뭉치 둘
 Snowball,Enemy.Snowball.Name,Snowball,40,105,0,0,3,1,False,False,3,0.8,16,0,None,0,None,눈사람에서 나옴
-Penguin,Enemy.Penguin.Name,Penguin,75,140,0,0,8,1,False,False,3,0.8,20,0,None,0,Ice,빠름, 둔화·빙결 면역
-Yeti,Enemy.Yeti.Name,Yeti,7000,25,0.25,0.25,300,20,False,True,70,1.4,52,0,None,0,Ice,설산 보스, 빙결 면역
+Penguin,Enemy.Penguin.Name,Penguin,75,140,0,0,8,1,False,False,3,0.8,20,0,None,0,Ice,"빠름, 둔화·빙결 면역"
+Yeti,Enemy.Yeti.Name,Yeti,7000,25,0.25,0.25,300,20,False,True,70,1.4,52,0,None,0,Ice,"설산 보스, 빙결 면역"

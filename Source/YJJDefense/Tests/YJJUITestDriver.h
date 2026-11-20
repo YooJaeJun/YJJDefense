@@ -5,6 +5,7 @@
 
 class AYJJDefenseGameMode;
 class AYJJDefenseHUD;
+class FYJJDefenseSim;
 
 // 실제 게임 화면에서 마우스·키 조작을 차례로 흉내 내며 UI가 제대로 반응하는지 확인한다 (yjj.UITest 1).
 // 준비 화면 → 출전 → 건설 메뉴 → 강화 → 룬 끌어다 꽂기 → 웨이브 호출 → 스펠 조준·시전 → 일시정지.
@@ -29,8 +30,37 @@ private:
 	void Click(const AYJJDefenseHUD& HUD, const FVector2f& Virtual, const FKey& Key = EKeys::LeftMouseButton);
 	void PressKey(const FKey& Key);
 
+	static void Shot(const TCHAR* Name);
+	/** 가장 앞선 적이 Lead초 뒤에 있을 자리 */
+	static FVector2f LeadEnemy(const FYJJDefenseSim& Sim, float Lead);
+	/** 가상 좌표 → Slate 화면 좌표 (게임 뷰포트 위젯 기준) */
+	static FVector2f ToScreen(const AYJJDefenseHUD& HUD, const FVector2f& Virtual);
+
+	// 단계 사이 대기 (초). 테스트 도구의 진행 박자라 데이터 표가 아니라 여기에 둔다
+	static constexpr float FirstWait = 0.5f;
+	static constexpr float StepWait = 0.3f;
+	static constexpr float SceneChangeWait = 0.6f;
+	static constexpr float WaveArriveWait = 7.f;
+	static constexpr float SpellFlightWait = 1.3f;
+	static constexpr float ImpactShotWait = 0.8f;
+	static constexpr float ReactionShotWait = 0.5f;
+	static constexpr float AimLead = 1.4f;
+	static constexpr float CastLead = 1.2f;
+
+	// 누를 자리 (가상 좌표 기준 오프셋)
+	static constexpr float EmptySpotClickUp = 10.f;
+	static constexpr float BuiltTowerClickUp = 60.f;
+	static constexpr float DiskTooltipDown = 42.f;
+	static constexpr float DragOverX = 6.f;
+	static constexpr float DragOverY = -4.f;
+	static constexpr int32 TestSpotA = 3;
+	static constexpr int32 TestSpotB = 4;
+	static constexpr int32 LightningBagIndex = 3;
+	static constexpr float NoEnemyX = 400.f;
+	static constexpr float NoEnemyY = 270.f;
+
 	int32 Step = 0;
-	float Wait = 0.5f;
+	float Wait = FirstWait;
 	int32 Passed = 0;
 	int32 Failed = 0;
 
