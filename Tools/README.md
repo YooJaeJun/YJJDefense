@@ -35,7 +35,7 @@ UI 테스트·스모크는 `-YJJSave=UITest/Smoke` 전용 저장 슬롯을 써�
 - 룬 조합 규칙(코드): `Game/YJJSpellForge.cpp`, 반응·원소 효과 적용: `YJJDefenseSim.cpp`의 `TriggerReaction`·`ApplyIntrinsic`
 - 색: `UI/YJJUIStyle.h` (아트 팔레트와 같다)
 - 지도 모양: `Tools/Art/map_data.py`의 `MAPS` → `BuildArt.ps1` 다시 실행 (`MapGeometry.csv` 생성). 지도를 늘리면 `Maps.csv`에도 추가
-- 그림: `Tools/Art/generate_art.py`가 모은다. 명암 도구 `paint.py`, 병졸·막사·궁수 `units_hd.py`, 나머지 타워 `towers_hd.py`, 몬스터 `monsters_hd.py`, 지도·성문 `maps_hd.py`
+- 그림: `Tools/Art/generate_art.py`가 모은다. 명암 도구 `paint.py`, 병졸·막사·궁수 `units_hd.py`, 나머지 타워 `towers_hd.py`, 몬스터 `monsters_hd.py`, 지도·성문 `maps_hd.py`, 건설 자리·투사체·이펙트 `fx_hd.py`
 - 코드 규칙: `.cpp`에는 namespace·변수·함수·구조체·템플릿을 선언하지 않는다 (헤더에만). 상수는 표나 이름 붙은 변수로
 
 ## 조작

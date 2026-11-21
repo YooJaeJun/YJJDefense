@@ -11,7 +11,6 @@
 
 import math
 import os
-import random
 import sys
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -20,6 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import map_data  # noqa: E402
 # 명암·재질을 넣어 다시 그린 것 (점점 늘려 간다)
 from units_hd import make_imp, make_soldier, make_tower_archer, make_tower_barracks  # noqa: E402
+from fx_hd import (make_arrow, make_ball, make_bomb, make_build_spot, make_burst, make_flame_fx, make_ice_block,  # noqa: E402
+                   make_magic_bolt, make_puff, make_star_fx)
 from maps_hd import make_map  # noqa: E402
 from towers_hd import make_tower_bombard, make_tower_mage, make_tower_shrine, make_wizard  # noqa: E402
 from monsters_hd import (make_chicken, make_coco_kid, make_coconut, make_crab, make_jellyfish, make_king_crab,  # noqa: E402
@@ -47,9 +48,7 @@ BLUE = rgba("4f8dff")
 PURPLE = rgba("9a78ff")
 TAN = rgba("ecca8c")
 BROWN = rgba("a8703c")
-STONE = rgba("e6e3ee")
 GRAY = rgba("b8bfca")
-DARK = rgba("5d5a6b")
 
 
 class Art:
@@ -146,130 +145,10 @@ class Art:
 
 
 # ---------------------------------------------------------------------------------------------
-# 캐릭터·타워는 units_hd.py, towers_hd.py, monsters_hd.py (명암 톤). 여기는 건설 자리·투사체·이펙트·UI·배경
-
-def make_build_spot():
-    """빈 건설 자리: 두툼한 돌 받침 + 망치 표지판. 풀밭·흙길과 확실히 구분되게 회색 돌로."""
-    a = Art(220, 156)
-    cx, cy = 110, 100
-    rx, ry = 92, 38
-    # 바닥 그림자, 받침 옆면(두께), 윗면
-    a.ellipse(cx, cy + 20, rx + 6, ry + 6, fill=rgba("6a9a4a", 110), outline=None)
-    a.ellipse(cx, cy + 12, rx, ry, fill=rgba("a8a3b8"), lw=6)
-    a.rrect(cx - rx, cy, cx + rx, cy + 12, 0, fill=rgba("a8a3b8"), outline=None)
-    a.line([(cx - rx, cy), (cx - rx, cy + 12)], lw=6, cap=False)
-    a.line([(cx + rx, cy), (cx + rx, cy + 12)], lw=6, cap=False)
-    a.ellipse(cx, cy, rx, ry, fill=STONE, lw=6)
-    # 포석 무늬: 안쪽 원 + 바깥 고리를 나누는 줄
-    irx, iry = 50, 20
-    a.ellipse(cx, cy, irx, iry, fill=rgba("f2f0f7"), outline=rgba("c4bfd3"), lw=3.5)
-    for index in range(8):
-        t = 2 * math.pi * (index + 0.5) / 8
-        a.line([(cx + irx * math.cos(t), cy + iry * math.sin(t)), (cx + (rx - 6) * math.cos(t), cy + (ry - 4) * math.sin(t))],
-               color=rgba("c4bfd3"), lw=3.5)
-    a.arc(cx - 20, cy - 8, 22, 8, 190, 300, color=WHITE, lw=4)
-    # 표지판: 말뚝 + 노란 판 + 망치
-    a.line([(cx, cy + 2), (cx, cy - 42)], color=INK, lw=11)
-    a.line([(cx, cy + 2), (cx, cy - 42)], color=BROWN, lw=5)
-    a.rrect(cx - 36, 6, cx + 36, 58, 10, fill=YELLOW, lw=6)
-    a.line([(cx - 14, 46), (cx + 8, 22)], color=INK, lw=9)
-    a.line([(cx - 14, 46), (cx + 8, 22)], color=BROWN, lw=4)
-    a.blob(cx + 9, 21, 15, 7, angle=-48, fill=GRAY, lw=4, power=4.0)
-    return a.result()
-
+# 캐릭터·타워(units_hd, towers_hd, monsters_hd), 지도(maps_hd), 건설 자리·투사체·이펙트(fx_hd)는 명암 톤. 여기는 링·빛 같은 기본 도형과 룬·UI
 
 # ---------------------------------------------------------------------------------------------
-# 투사체
-
-def make_arrow():
-    a = Art(64, 20, lw=3)
-    a.line([(4, 10), (54, 10)], color=INK, lw=6)
-    a.line([(6, 10), (50, 10)], color=BROWN, lw=2.5)
-    a.poly([(48, 3), (62, 10), (48, 17)], fill=GRAY, lw=3)
-    a.poly([(2, 4), (14, 10), (2, 16)], fill=RED, lw=3)
-    return a.result()
-
-
-def make_bomb():
-    a = Art(56, 60)
-    a.line([(36, 18), (44, 6)], lw=5)
-    a.star(46, 6, 8, 3.5, 4, fill=YELLOW, lw=2.5)
-    a.ellipse(28, 34, 22, 22, fill=DARK)
-    a.eyes(30, 32, gap=7, r=3)
-    a.dot(18, 24, 4, rgba("8a8799"))
-    return a.result()
-
-
-def make_magic_bolt():
-    a = Art(56, 56)
-    a.star(28, 28, 24, 11, 4, fill=PURPLE, lw=4)
-    a.dot(28, 28, 6, WHITE)
-    return a.result()
-
-
-def make_ball(kind):
-    a = Art(80, 80)
-    cx, cy = 40, 42
-    if kind == "Fire":
-        a.poly([(40, 4), (58, 26), (66, 46), (58, 66), (40, 74), (22, 66), (14, 46), (24, 30), (30, 36)], fill=ORANGE)
-        a.ellipse(40, 54, 15, 15, fill=YELLOW, outline=None)
-        cy = 52
-    elif kind == "Ice":
-        a.blob(cx, cy, 28, 28, fill=SKY, n=6, angle=30)
-        a.line([(26, 30), (36, 24)], color=WHITE, lw=4)
-    elif kind == "Water":
-        a.poly([(40, 6), (58, 34), (62, 50), (54, 66), (40, 72), (26, 66), (18, 50), (22, 34)], fill=BLUE)
-        a.dot(30, 44, 5, rgba("bcd6ff"))
-        cy = 50
-    elif kind == "Lightning":
-        a.star(cx, cy, 34, 20, 9, fill=YELLOW)
-    elif kind == "Poison":
-        a.ellipse(cx, cy, 27, 27, fill=GREEN)
-        a.ellipse(66, 14, 7, 7, fill=GREEN, lw=3)
-        a.ellipse(14, 20, 5, 5, fill=GREEN, lw=3)
-    elif kind == "Wind":
-        a.ellipse(cx, cy, 27, 27, fill=MINT)
-        a.arc(cx, cy, 18, 18, 200, 420, color=WHITE, lw=4)
-    else:
-        a.ellipse(cx, cy, 27, 27, fill=PURPLE)
-        a.star(54, 26, 9, 4, 4, fill=WHITE, lw=2.5)
-
-    if kind == "Poison":
-        for ex in (cx - 9, cx + 9):
-            a.line([(ex - 4, cy - 6), (ex + 4, cy + 2)], lw=3)
-            a.line([(ex + 4, cy - 6), (ex - 4, cy + 2)], lw=3)
-    else:
-        a.eyes(cx, cy - 2, gap=9, r=3.6)
-    a.ellipse(cx, cy + 9, 3, 4, fill=INK, outline=None)
-    return a.result()
-
-
-# ---------------------------------------------------------------------------------------------
-# 이펙트 (흰색으로 만들고 게임에서 색을 입힌다)
-
-def make_puff(frame):
-    a = Art(160, 160)
-    random.seed(40 + frame)
-    if frame < 2:
-        radius = 30 + frame * 16
-        circles = [(80 + radius * 0.7 * math.cos(t), 80 + radius * 0.7 * math.sin(t), radius * 0.55)
-                   for t in [2 * math.pi * i / 7 for i in range(7)]]
-        circles.append((80, 80, radius * 0.8))
-        a.cloud(circles)
-    else:
-        spread = 46 + (frame - 2) * 14
-        size = 11 - (frame - 2) * 5
-        for i in range(7):
-            t = 2 * math.pi * i / 7 + 0.3
-            a.cloud([(80 + spread * math.cos(t), 80 + spread * math.sin(t), size)], lw=4)
-    return a.result()
-
-
-def make_burst():
-    a = Art(160, 160)
-    a.star(80, 80, 74, 40, 11, fill=WHITE, lw=6)
-    return a.result()
-
+# 링·빛·그림자 (흰색으로 만들고 게임에서 색을 입힌다)
 
 def make_ring():
     a = Art(256, 256, ss=2)
@@ -304,27 +183,6 @@ def make_shadow():
     out = Image.new("RGBA", size, (20, 30, 20, 0))
     out.putalpha(img)
     return out
-
-
-def make_star_fx():
-    a = Art(48, 48)
-    a.star(24, 24, 21, 8, 4, fill=WHITE, lw=4)
-    return a.result()
-
-
-def make_ice_block():
-    a = Art(120, 132)
-    a.poly([(18, 34), (60, 10), (102, 30), (108, 104), (62, 124), (14, 106)], fill=rgba("bfeaff", 190), lw=5)
-    a.line([(60, 12), (62, 122)], color=rgba("ffffff", 150), lw=3, cap=False)
-    a.line([(30, 44), (44, 36)], color=WHITE, lw=5)
-    a.line([(28, 58), (34, 54)], color=WHITE, lw=5)
-    return a.result()
-
-
-def make_flame_fx():
-    a = Art(48, 56)
-    a.poly([(24, 2), (36, 20), (44, 36), (36, 50), (24, 54), (12, 50), (4, 36), (12, 24), (17, 30)], fill=WHITE, lw=4)
-    return a.result()
 
 
 # ---------------------------------------------------------------------------------------------
