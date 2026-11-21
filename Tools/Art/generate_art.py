@@ -1,6 +1,6 @@
 """YJJDefense 아트 생성기.
 
-방향: 냥코 대전쟁처럼 귀엽지만 엉뚱한 그림 — 굵은 먹선, 흰 몸통, 점 눈, 멍한 표정, 막대 팔다리.
+방향: 냥코 대전쟁처럼 귀엽지만 엉뚱한 얼굴 + 킹덤러쉬급 색·명암·재질 (paint.py, units_hd.py로 옮겨 가는 중).
 모든 그림을 코드로 그린다 (4배 크게 그린 뒤 줄여서 매끈한 선). 외부 이미지 없음.
 
 실행 (Tools/Art/BuildArt.ps1이 대신 해 준다):
@@ -18,6 +18,8 @@ from PIL import Image, ImageDraw, ImageFilter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import map_data  # noqa: E402
+# 명암·재질을 넣어 다시 그린 것 (점점 늘려 간다)
+from units_hd import make_imp, make_soldier, make_tower_archer, make_tower_barracks  # noqa: E402
 
 SS = 4
 INK = (36, 30, 40, 255)
@@ -150,19 +152,6 @@ def legs(a, x0, x1, y_top, y_foot, frame, stride=7.0, lw=6.0, foot=8.0):
 # ---------------------------------------------------------------------------------------------
 # 몬스터 (오른쪽을 본다. 2프레임 걷기)
 
-def make_imp(frame):
-    a = Art(112, 124)
-    bob = 0 if frame == 0 else -3
-    legs(a, 46, 66, 94 + bob, 116, frame)
-    a.poly([(49, 36 + bob), (59, 8 + bob), (70, 36 + bob)], fill=YELLOW)          # 외뿔
-    arm = 6 if frame == 0 else -4
-    a.line([(22, 68 + bob), (9, 80 + arm)], lw=6)
-    a.line([(90, 68 + bob), (103, 80 - arm)], lw=6)
-    a.ellipse(56, 64 + bob, 38, 35)                                                   # 찹쌀떡 몸
-    a.eyes(62, 58 + bob, gap=13, r=4.5)
-    a.ellipse(66, 73 + bob, 4.5, 5.5, fill=INK, outline=None)                         # 멍하게 벌린 입
-    a.poly([(56, 78 + bob), (59, 85 + bob), (62, 78 + bob)], fill=WHITE, lw=2.5)      # 덧니
-    return a.result()
 
 
 def make_chicken(frame):
@@ -282,23 +271,6 @@ def bean(a, cx, cy, rx=24, ry=28, look=4.0, mouth="line"):
         a.ellipse(cx + look + 1, cy + 10, 3.5, 4.5, fill=INK, outline=None)
 
 
-def make_soldier(frame):
-    a = Art(96, 108)
-    lean = 4 if frame == 2 else 0
-    legs(a, 38, 54, 80, 100, frame if frame < 2 else 0, stride=6 if frame < 2 else 9)
-    if frame == 2:
-        a.line([(62, 58), (94, 54)], lw=8)                        # 찌르기
-        a.line([(64, 58), (92, 54.5)], color=rgba("e4ebf2"), lw=3)
-    else:
-        a.line([(64, 66), (82, 36)], lw=8)
-        a.line([(65, 64), (81, 38)], color=rgba("e4ebf2"), lw=3)
-    bean(a, 46 + lean, 56, 24, 27, look=5, mouth="line" if frame < 2 else "o")
-    a.chord(46 + lean, 42, 27, 24, 180, 360, fill=GRAY)          # 냄비 투구
-    a.line([(18 + lean, 42), (76 + lean, 42)], lw=5)
-    a.dot(46 + lean, 18, 5, RED)
-    a.ellipse(24 + lean, 68, 15, 15, fill=SKY)                    # 방패
-    a.dot(24 + lean, 68, 4, WHITE)
-    return a.result()
 
 
 def make_wizard(frame):
@@ -336,52 +308,8 @@ def flag(a, x, y_base, height, color=RED):
     a.poly([(x, y_base - height), (x + 30, y_base - height + 11), (x, y_base - height + 22)], fill=color, lw=4)
 
 
-def make_tower_archer(level):
-    a = Art(240, 300)
-    hh = 104 + level * 18
-    top = 276 - hh
-    a.rrect(74, top, 166, 282, 12, fill=WHITE)
-    a.rrect(108, 232, 132, 282, 10, fill=BROWN)
-    a.rrect(110, top + 34, 130, top + 60, 8, fill=DARK)
-    if level >= 1:
-        a.rrect(74, top + 70, 166, top + 84, 0, fill=SKY, lw=4)
-    # 망루 위 궁수 (아래 절반은 난간에 가린다)
-    bean(a, 120, top - 34, 22, 24, look=5)
-    a.poly([(98, top - 50), (118, top - 78), (142, top - 50)], fill=GREEN)
-    a.arc(150, top - 34, 12, 26, -80, 80, lw=5)
-    a.line([(152, top - 60), (152, top - 8)], lw=2.5, cap=False)
-    if level >= 2:
-        bean(a, 84, top - 28, 18, 20, look=4)
-        a.poly([(66, top - 42), (82, top - 64), (102, top - 42)], fill=GREEN)
-    trim = YELLOW if level >= 2 else WHITE
-    a.rrect(58, top - 16, 182, top + 16, 8, fill=trim)
-    for x in (58, 92, 126, 160):
-        a.rrect(x, top - 34, x + 22, top - 10, 5, fill=trim)
-    flag(a, 176, top - 30, 54)
-    if level >= 1:
-        flag(a, 64, top - 30, 40, color=SKY)
-    return a.result()
 
 
-def make_tower_barracks(level):
-    a = Art(240, 300)
-    wall_top = 186 - level * 10
-    a.rrect(52, wall_top, 188, 284, 10, fill=WHITE)
-    a.rrect(104, 226, 136, 284, 12, fill=BROWN)
-    a.dot(128, 258, 3.5, YELLOW)
-    a.ellipse(120, wall_top + 22, 15, 15, fill=SKY)
-    a.dot(120, wall_top + 22, 4.5, WHITE)
-    if level >= 1:
-        a.rrect(64, 232, 90, 258, 6, fill=SKY, lw=4)
-        a.rrect(150, 232, 176, 258, 6, fill=SKY, lw=4)
-    peak = 104 - level * 14
-    a.poly([(34, wall_top + 6), (120, peak), (206, wall_top + 6)], fill=ORANGE if level < 2 else RED)
-    if level >= 2:
-        a.line([(52, wall_top - 2), (120, peak + 26), (188, wall_top - 2)], color=YELLOW, lw=6, cap=False)
-    flag(a, 120, peak + 4, 46, color=SKY if level == 0 else YELLOW)
-    if level >= 2:
-        flag(a, 60, wall_top - 10, 36)
-    return a.result()
 
 
 def make_tower_bombard(level):
