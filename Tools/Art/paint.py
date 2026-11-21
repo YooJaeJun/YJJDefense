@@ -38,6 +38,9 @@ def tone(color, light=0.0, sat=0.0, hue=0.0):
 def shade_of(color):
     """그림자 색: 어둡게, 채도 올리고, 붉은 보라 쪽으로. 회색 계열은 따뜻한 회갈색으로."""
     r, g, b = color[:3]
+    if min(r, g, b) > 225:
+        # 흰색은 서늘한 라벤더 회색으로 (갈색으로 칠하면 때 묻어 보인다)
+        return (int(r * 0.78), int(g * 0.77), int(min(b * 0.9 + 12, 255)), 255)
     if max(r, g, b) - min(r, g, b) < 40:
         return tone((r, g, b, 255), light=-0.32, sat=-0.02, hue=0.0)
     hue_shift = 10.0 if (r >= g and r >= b) else (-12.0 if b >= r else 12.0)
