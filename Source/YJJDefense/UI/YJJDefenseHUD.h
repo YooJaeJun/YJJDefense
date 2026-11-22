@@ -132,6 +132,25 @@ private:
 		FString Body;
 	};
 
+	// 프레임 묶음 하나 = Anims.csv 한 줄 (텍스처 T_<이름>_<번호>). 비어 있으면 예전 두세 장 그림을 쓴다
+	struct FSpriteAnim
+	{
+		TArray<UTexture2D*> Frames;
+		float Fps = 0.f;
+		int32 HitFrame = 0;
+
+		bool IsValid() const { return !Frames.IsEmpty(); }
+		UTexture2D* Loop(float Time) const { return Frames[FMath::FloorToInt(FMath::Max(Time, 0.f) * Fps) % Frames.Num()]; }
+	};
+
+	// 한 캐릭터의 동작들
+	struct FActorAnims
+	{
+		FSpriteAnim Idle;
+		FSpriteAnim Walk;
+		FSpriteAnim Attack;
+	};
+
 	// ---- 기본 그리기 (가상 좌표) ----
 	FVector2f TexSize(const UTexture2D* Texture) const;
 	void DrawSprite(UTexture2D* Texture, const FVector2f& Center, const FVector2f& Size, const FLinearColor& Color = FLinearColor::White, float Rotation = 0.f, bool bFlipX = false);
@@ -189,6 +208,8 @@ private:
 	void DrawTargeting();
 	void DrawBanner(float DeltaSeconds);
 	void DrawPauseOverlay();
+	// yjj.AnimPreview 1: 자세히 움직이는 동작을 서 있기·걷기·공격으로 나란히 돌려 본다 (그림 확인용)
+	void DrawAnimPreview();
 	void DrawTooltip();
 	void SetTooltip(const FString& Title, const FString& Body, const FLinearColor& TitleColor);
 	FString DescribeSpell(const FYJJSpellSpec& Spell, bool& bOutNew) const;
@@ -213,12 +234,17 @@ private:
 	void DrawMapPicker(UYJJSaveGame& Save);
 
 	UTexture2D* LoadTex(const FString& Name);
+	FSpriteAnim LoadAnim(const FString& Name);
+	FActorAnims LoadActorAnims(const FString& Prefix);
+	// 싸우는 중의 프레임: 다음 타격 전 AttackWindup 동안 준비 동작 → 맞는 순간 HitFrame → AttackRecover 동안 되돌림 → 나머지는 Idle
+	UTexture2D* FightFrame(const FActorAnims& Anims, float TimeToHit, float Interval, float Time) const;
 	UTexture2D* RuneTex(EYJJRune Rune) const { return RuneTextures[FMath::Min<int32>(static_cast<int32>(Rune), static_cast<int32>(EYJJRune::Count) - 1)]; }
 	UTexture2D* BallTex(EYJJElement Element) const { return BallTextures[FMath::Min<int32>(static_cast<int32>(Element), static_cast<int32>(EYJJElement::Count) - 1)]; }
 	UTexture2D* MapTex(int32 Map) const { return MapTextures.IsValidIndex(Map) ? MapTextures[Map] : nullptr; }
 	UTexture2D* MapThumb(int32 Map) const { return MapThumbs.IsValidIndex(Map) ? MapThumbs[Map] : nullptr; }
 
 	static const FYJJUILayout& UI();
+	static TAutoConsoleVariable<int32> CVarAnimPreview;
 
 	// 로드한 텍스처를 붙잡아 둔다 (GC 방지)
 	UPROPERTY()
@@ -236,6 +262,8 @@ private:
 	UTexture2D* TowerTextures[static_cast<int32>(EYJJTower::Count)][YJJ::NumTowerLevels] = {};
 	UTexture2D* SoldierTextures[SoldierFrames] = {};
 	UTexture2D* WizardTextures[WizardFrames] = {};
+	FActorAnims EnemyAnims[static_cast<int32>(EYJJEnemy::Count)];
+	FActorAnims SoldierAnims;
 	UTexture2D* RuneTextures[static_cast<int32>(EYJJRune::Count)] = {};
 	UTexture2D* BallTextures[static_cast<int32>(EYJJElement::Count)] = {};   // [0] = 비전
 	UTexture2D* PuffTextures[PuffFrames] = {};
@@ -312,6 +340,11 @@ private:
 	static constexpr const TCHAR* TextureFolder = TEXT("/Game/YJJDefense/Textures");
 	static constexpr const TCHAR* ThumbSuffix = TEXT("_Thumb");
 	static constexpr const TCHAR* ArcaneBallArt = TEXT("Arcane");
+	static constexpr const TCHAR* SoldierAnimPrefix = TEXT("Soldier");
+	static constexpr const TCHAR* EnemyAnimPrefix = TEXT("Enemy_");
+	static constexpr const TCHAR* IdleAnimSuffix = TEXT("_Idle");
+	static constexpr const TCHAR* WalkAnimSuffix = TEXT("_Walk");
+	static constexpr const TCHAR* AttackAnimSuffix = TEXT("_Attack");
 	static constexpr const TCHAR* BaseFontPath = TEXT("/Engine/EngineFonts/Roboto.Roboto");
 	static constexpr const TCHAR* BaseFontStyle = TEXT("Bold");
 	static constexpr const TCHAR* GameFontFace = TEXT("Regular");

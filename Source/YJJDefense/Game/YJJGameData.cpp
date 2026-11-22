@@ -150,6 +150,7 @@ void FYJJGameDatabase::Load()
 	LoadStartDisks();
 	LoadBot();
 	LoadSounds();
+	LoadAnims();
 	Validate();
 	UE_LOG(LogYJJDefense, Display, TEXT("[Data] loaded: %d runes, %d towers, %d enemies, %d maps, %d problems"), Runes.Num(), Towers.Num(), Enemies.Num(), Maps.Num(), Problems.Num());
 }
@@ -464,6 +465,20 @@ void FYJJGameDatabase::LoadSounds()
 	});
 }
 
+void FYJJGameDatabase::LoadAnims()
+{
+	const UDataTable* Table = LoadTable(TEXT("Anims.csv"), FYJJAnimRow::StaticStruct());
+	Table->ForeachRow<FYJJAnimRow>(TEXT("YJJData"), [this](const FName& Key, const FYJJAnimRow& Row)
+	{
+		if (Row.Frames <= 0 || Row.HitFrame < 0 || Row.HitFrame >= Row.Frames || Row.Fps < 0.f)
+		{
+			Problem(FString::Printf(TEXT("Anims.csv %s: 프레임 %d, 속도 %.1f, 타격 프레임 %d가 맞지 않는다"), *Key.ToString(), Row.Frames, Row.Fps, Row.HitFrame));
+			return;
+		}
+		Anims.Add(Key, { Row.Frames, Row.Fps, Row.HitFrame });
+	});
+}
+
 void FYJJGameDatabase::Validate()
 {
 	if (Maps.IsEmpty())
@@ -583,6 +598,11 @@ TConstArrayView<EYJJTower> YJJData::BotBuildPattern()
 const FYJJSoundDef* YJJData::Sound(FName Key)
 {
 	return FYJJGameDatabase::Get().Sounds.Find(Key);
+}
+
+const FYJJAnimDef* YJJData::Anim(FName Key)
+{
+	return FYJJGameDatabase::Get().Anims.Find(Key);
 }
 
 FString YJJData::EnemyTraits(EYJJEnemy Type)

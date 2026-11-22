@@ -1,0 +1,10 @@
+﻿Name,Frames,Fps,HitFrame,Note
+Soldier_Idle,6,6,0,숨쉬기·깜빡임. 텍스처 T_<Name>_<번호> (Tools/Art/anim_hd.py가 그린다)
+Soldier_Walk,8,12,0,걷기
+Soldier_Attack,6,0,3,창 찌르기. 공격 간격에 맞춰 HitFrame이 맞는 순간에 온다 (Fps는 안 씀)
+Enemy_Imp_Idle,4,5,0,막혀서 기다리는 동안
+Enemy_Imp_Walk,8,10,0,뒤뚱 걷기
+Enemy_Imp_Attack,6,0,3,방망이 내려치기
+Enemy_Chicken_Idle,4,6,0,
+Enemy_Chicken_Walk,8,16,0,전력 질주
+Enemy_Chicken_Attack,6,0,3,부리 쪼기

@@ -9,6 +9,7 @@
 | `RunTests.ps1` | `YJJDefense.*` 자동화 테스트(스펠 조합, 원소 반응, 타워, 한 판 전체·밸런스, 수집, 데이터 표 검사) |
 | `RunUITest.ps1` | 게임을 띄워 Slate에 마우스·키 이벤트를 넣으며 UI 19단계 확인 → `Saved/Screenshots/UITest_*.png`. `-Lang en`으로 영어 화면 |
 | `RunSmoke.ps1` | 봇이 한 판(`-Runs N`)을 플레이 → 로그 요약 + `Saved/Screenshots/AutoPlay_*.png`. `-Map N`으로 지도 지정(0 들판, 1 해변, 2 설산), `-Fresh`면 수집 진행 초기화, `-Lang en` 영어 |
+| `RunAnimPreview.ps1` | 동작 미리보기: 병졸·몬스터의 서 있기·걷기·공격을 게임 화면에서 나란히 돌린다 (`yjj.AnimPreview 1`). `-Capture`면 연속 스크린샷을 찍고 끝낸다 |
 
 UI 테스트·스모크는 `-YJJSave=UITest/Smoke` 전용 저장 슬롯을 써서 실제 진행(`Saved/SaveGames/YJJDefense.sav`)은 건드리지 않는다.
 그림은 Pillow로 그린다. `BuildArt.ps1`이 처음 한 번 `Tools/Art/.venv`를 만든다 (Python 3 필요).
@@ -28,6 +29,7 @@ UI 테스트·스모크는 `-YJJSave=UITest/Smoke` 전용 저장 슬롯을 써�
 | `Towers.csv` / `Enemies.csv` | 병졸 단계별 수치 / 몬스터 (쪼개짐 `SplitInto`, 얼음 면역 `Immune`) |
 | `Maps.csv` / `Waves.csv` / `MapGeometry.csv` | 지도 이름·그림·미리보기 / 웨이브 묶음 / 길·자리 (`map_data.py`가 생성) |
 | `Unlocks.csv` / `StartDisks.csv` | 해금 순서(0점 = 처음부터) / 처음 디스크 구성 |
+| `Anims.csv` | 자세히 움직이는 동작: 행 이름 = 텍스처 앞부분(`T_<이름>_<번호>`), 프레임 수·속도·타격 프레임. 없는 캐릭터는 예전 두 장 그림 |
 | `Sounds.csv` / `BotBuildOrder.csv` | 사건별 효과음 / 봇이 짓는 병졸 순서 |
 
 - 언어: 명령줄 `-yjjlang=en` > 콘솔 `yjj.Lang en` > OS 표시 언어 > ko. 없는 글자는 `[키]`로 보인다
@@ -35,7 +37,7 @@ UI 테스트·스모크는 `-YJJSave=UITest/Smoke` 전용 저장 슬롯을 써�
 - 룬 조합 규칙(코드): `Game/YJJSpellForge.cpp`, 반응·원소 효과 적용: `YJJDefenseSim.cpp`의 `TriggerReaction`·`ApplyIntrinsic`
 - 색: `UI/YJJUIStyle.h` (아트 팔레트와 같다)
 - 지도 모양: `Tools/Art/map_data.py`의 `MAPS` → `BuildArt.ps1` 다시 실행 (`MapGeometry.csv` 생성). 지도를 늘리면 `Maps.csv`에도 추가
-- 그림: `Tools/Art/generate_art.py`가 모은다. 명암 도구 `paint.py`, 병졸·막사·궁수 `units_hd.py`, 나머지 타워 `towers_hd.py`, 몬스터 `monsters_hd.py`, 지도·성문 `maps_hd.py`, 건설 자리·투사체·이펙트 `fx_hd.py`
+- 그림: `Tools/Art/generate_art.py`가 모은다. 명암 도구 `paint.py`, 병졸·막사·궁수 `units_hd.py`, 나머지 타워 `towers_hd.py`, 몬스터 `monsters_hd.py`, 지도·성문 `maps_hd.py`, 건설 자리·투사체·이펙트 `fx_hd.py`, 룬·UI `ui_hd.py`, 동작(자세 그리기) `anim_hd.py`
 - 코드 규칙: `.cpp`에는 namespace·변수·함수·구조체·템플릿을 선언하지 않는다 (헤더에만). 상수는 표나 이름 붙은 변수로
 
 ## 조작

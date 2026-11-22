@@ -243,3 +243,15 @@ struct FYJJSoundRow : public FTableRowBase
 	UPROPERTY(EditAnywhere) float Volume = 1.f;
 	UPROPERTY(EditAnywhere) FString Note;
 };
+
+/** Anims.csv: 행 이름 = 텍스처 이름 앞부분 (T_<이름>_<번호>) */
+USTRUCT()
+struct FYJJAnimRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere) int32 Frames = 0;
+	UPROPERTY(EditAnywhere) float Fps = 0.f;
+	UPROPERTY(EditAnywhere) int32 HitFrame = 0;
+	UPROPERTY(EditAnywhere) FString Note;
+};

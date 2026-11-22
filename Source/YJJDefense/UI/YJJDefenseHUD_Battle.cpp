@@ -126,6 +126,72 @@ void AYJJDefenseHUD::DrawSelectedRange()
 	}
 }
 
+void AYJJDefenseHUD::DrawAnimPreview()
+{
+	if (CVarAnimPreview.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	// 동작이 하나라도 있는 캐릭터만 한 줄씩
+	TArray<TPair<FString, const FActorAnims*>> Rows;
+	if (SoldierAnims.Idle.IsValid() || SoldierAnims.Walk.IsValid() || SoldierAnims.Attack.IsValid())
+	{
+		Rows.Add({ YJJLoc::Get(TEXT("AnimPreview.Soldier")), &SoldierAnims });
+	}
+	for (int32 Type = 0; Type < static_cast<int32>(EYJJEnemy::Count); ++Type)
+	{
+		const FActorAnims& Anims = EnemyAnims[Type];
+		if (Anims.Idle.IsValid() || Anims.Walk.IsValid() || Anims.Attack.IsValid())
+		{
+			Rows.Add({ YJJLoc::Get(YJJData::Enemy(static_cast<EYJJEnemy>(Type)).NameKey), &Anims });
+		}
+	}
+
+	const float X = UI().AnimPreviewX;
+	const float Y = UI().AnimPreviewY;
+	const float W = UI().AnimPreviewW;
+	const float RowH = UI().AnimPreviewRowH;
+	const float LabelW = UI().AnimPreviewLabelW;
+	const float ColW = (W - LabelW) / UI().AnimPreviewColumns;
+	const float H = UI().AnimPreviewHeaderH + RowH * Rows.Num() + UI().AnimPreviewPad;
+	DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, UI().AnimPreviewDim));
+	DrawPanel(X, Y, W, H, YJJUI::Cream);
+
+	const TCHAR* ColumnKeys[] = { TEXT("AnimPreview.Idle"), TEXT("AnimPreview.Walk"), TEXT("AnimPreview.Attack") };
+	DrawLabel(YJJLoc::Get(TEXT("AnimPreview.Title")), X + UI().AnimPreviewPad, Y + UI().AnimPreviewTitleY, UI().AnimPreviewTitleSize, YJJUI::Ink);
+	for (int32 Column = 0; Column < UE_ARRAY_COUNT(ColumnKeys); ++Column)
+	{
+		DrawLabel(YJJLoc::Get(ColumnKeys[Column]), X + LabelW + ColW * (Column + 0.5f), Y + UI().AnimPreviewColumnY, UI().AnimPreviewLabelSize, YJJUI::DarkGray, EAlign::Center);
+	}
+
+	const float Interval = UI().AnimPreviewInterval;
+	const float TimeToHit = Interval - FMath::Fmod(UITime, Interval);
+	const FVector2f Scale(UI().AnimPreviewScale, UI().AnimPreviewScale);
+	for (int32 Row = 0; Row < Rows.Num(); ++Row)
+	{
+		const FActorAnims& Anims = *Rows[Row].Value;
+		const float RowY = Y + UI().AnimPreviewHeaderH + RowH * Row;
+		DrawLabel(Rows[Row].Key, X + UI().AnimPreviewPad, RowY + RowH * 0.5f, UI().AnimPreviewLabelSize, YJJUI::Ink, EAlign::Left, 0.f, LabelW - UI().AnimPreviewPad);
+
+		UTexture2D* Frames[] = {
+			Anims.Idle.IsValid() ? Anims.Idle.Loop(UITime) : nullptr,
+			Anims.Walk.IsValid() ? Anims.Walk.Loop(UITime) : nullptr,
+			Anims.Attack.IsValid() ? FightFrame(Anims, TimeToHit, Interval, UITime) : nullptr,
+		};
+		for (int32 Column = 0; Column < UE_ARRAY_COUNT(Frames); ++Column)
+		{
+			if (!Frames[Column])
+			{
+				continue;
+			}
+			const FVector2f Feet(X + LabelW + ColW * (Column + 0.5f), RowY + UI().AnimPreviewFeetY);
+			DrawSprite(ShadowTexture, Feet, FVector2f(UI().AnimPreviewShadowW, UI().AnimPreviewShadowH));
+			DrawSpriteFeet(Frames[Column], Feet, Scale);
+		}
+	}
+}
+
 void AYJJDefenseHUD::DrawPauseOverlay()
 {
 	DrawBox(0.f, 0.f, YJJ::ViewW, YJJ::ViewH, YJJUI::WithAlpha(YJJUI::Ink, UI().PauseDim));
@@ -286,9 +352,24 @@ void AYJJDefenseHUD::DrawSpot(int32 Spot)
 void AYJJDefenseHUD::DrawEnemy(const FYJJEnemyState& Enemy)
 {
 	const FYJJEnemyDef& Def = YJJData::Enemy(Enemy.Type);
-	const float FrameRate = Def.bFlying ? UI().EnemyFlyFrameRate : UI().EnemyWalkFrameRate;
-	UTexture2D* Texture = EnemyTextures[static_cast<int32>(Enemy.Type)][FMath::FloorToInt(Enemy.AnimTime * FrameRate) % EnemyFrames];
-	const FVector2f Size = TexSize(Texture) * UI().SpriteScale;
+	const int32 TypeIndex = static_cast<int32>(Enemy.Type);
+	const FActorAnims& Anims = EnemyAnims[TypeIndex];
+	UTexture2D* Texture = nullptr;
+	if (Enemy.BlockerId != INDEX_NONE && Anims.Attack.IsValid())
+	{
+		Texture = FightFrame(Anims, Enemy.AttackTimer, Def.MeleeInterval, Enemy.AnimTime);
+	}
+	else if (Anims.Walk.IsValid())
+	{
+		Texture = Anims.Walk.Loop(Enemy.AnimTime);
+	}
+	else
+	{
+		const float FrameRate = Def.bFlying ? UI().EnemyFlyFrameRate : UI().EnemyWalkFrameRate;
+		Texture = EnemyTextures[TypeIndex][FMath::FloorToInt(Enemy.AnimTime * FrameRate) % EnemyFrames];
+	}
+	// 그림자·체력 막대는 기본 그림 크기로 (동작 그림은 무기가 휘둘러질 여백만큼 캔버스가 넓다)
+	const FVector2f Size = TexSize(EnemyTextures[TypeIndex][0]) * UI().SpriteScale;
 
 	FVector2f Feet = Enemy.Pos + FVector2f(0.f, UI().UnitFeetDown);
 	DrawSprite(ShadowTexture, Enemy.Pos + FVector2f(0.f, UI().UnitShadowDown), FVector2f(Size.X * UI().EnemyShadowW, Size.X * UI().EnemyShadowH));
@@ -381,9 +462,30 @@ void AYJJDefenseHUD::DrawEnemyStatus(const FYJJEnemyState& Enemy, const FVector2
 void AYJJDefenseHUD::DrawSoldier(const FYJJSoldierState& Soldier)
 {
 	constexpr int32 WalkFrames = 2;
-	const int32 Frame = Soldier.AttackAnim > 0.f ? SoldierAttackFrame : (Soldier.bMoving ? (FMath::FloorToInt(Soldier.AnimTime * UI().SoldierWalkFrameRate) % WalkFrames) : 0);
-	UTexture2D* Texture = SoldierTextures[Frame];
-	const FVector2f Size = TexSize(Texture) * UI().SpriteScale;
+	// 병졸마다 숨쉬기 박자를 어긋나게
+	const float AnimTime = Soldier.AnimTime + Soldier.Id * UI().AnimIdPhase;
+	const bool bFighting = Soldier.TargetId != INDEX_NONE && (!Soldier.bMoving || Soldier.AttackAnim > 0.f);
+	UTexture2D* Texture = nullptr;
+	if (bFighting && SoldierAnims.Attack.IsValid())
+	{
+		const FYJJTowerState& Tower = Game->GetSim().Towers[Soldier.Spot];
+		const float Interval = YJJData::Tower(EYJJTower::Barracks).Levels[FMath::Clamp(Tower.Level, 0, YJJ::MaxTowerLevel)].Interval;
+		Texture = FightFrame(SoldierAnims, Soldier.AttackTimer, Interval, AnimTime);
+	}
+	else if (Soldier.bMoving && SoldierAnims.Walk.IsValid())
+	{
+		Texture = SoldierAnims.Walk.Loop(AnimTime);
+	}
+	else if (!Soldier.bMoving && SoldierAnims.Idle.IsValid())
+	{
+		Texture = SoldierAnims.Idle.Loop(AnimTime);
+	}
+	else
+	{
+		const int32 Frame = Soldier.AttackAnim > 0.f ? SoldierAttackFrame : (Soldier.bMoving ? (FMath::FloorToInt(Soldier.AnimTime * UI().SoldierWalkFrameRate) % WalkFrames) : 0);
+		Texture = SoldierTextures[Frame];
+	}
+	const FVector2f Size = TexSize(SoldierTextures[0]) * UI().SpriteScale;
 	const FVector2f Feet = Soldier.Pos + FVector2f(0.f, UI().UnitFeetDown);
 
 	DrawSprite(ShadowTexture, Soldier.Pos + FVector2f(0.f, UI().UnitShadowDown), FVector2f(UI().SoldierShadowW, UI().SoldierShadowH));

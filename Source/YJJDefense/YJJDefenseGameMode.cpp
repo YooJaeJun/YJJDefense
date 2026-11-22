@@ -28,6 +28,14 @@ TAutoConsoleVariable<float> AYJJDefenseGameMode::CVarAutoPlayShotInterval(
 	TEXT("yjj.AutoPlayShotInterval"), 45.f,
 	TEXT("오토플레이 중 스크린샷 간격 (게임 시간 초). 0이면 찍지 않는다"));
 
+TAutoConsoleVariable<float> AYJJDefenseGameMode::CVarAutoPlayShotStart(
+	TEXT("yjj.AutoPlayShotStart"), 0.f,
+	TEXT("0보다 크면 오토플레이 전투 스크린샷을 이 게임 시간(초)부터 찍는다 (애니메이션을 연속으로 찍어 볼 때)"));
+
+TAutoConsoleVariable<int32> AYJJDefenseGameMode::CVarAutoPlayShotCount(
+	TEXT("yjj.AutoPlayShotCount"), AYJJDefenseGameMode::AutoPlayMaxShots,
+	TEXT("오토플레이 전투 스크린샷 최대 장 수"));
+
 TAutoConsoleVariable<int32> AYJJDefenseGameMode::CVarUITest(
 	TEXT("yjj.UITest"), 0,
 	TEXT("1이면 마우스 조작을 흉내 내는 UI 테스트를 돌리고 게임을 종료한다 (Tools/RunUITest.ps1)"));
@@ -300,8 +308,10 @@ void AYJJDefenseGameMode::TickAutoPlay(float DeltaSeconds)
 				Sim.Time, Sim.WaveIndex + 1, YJJData::NumWaves(), Sim.Lives, Sim.Gold, Sim.Enemies.Num(), Sim.Kills, Sim.SpellsCast, Sim.Reactions, Sim.CombosCast.Num());
 		}
 		const float Interval = CVarAutoPlayShotInterval.GetValueOnGameThread();
-		if (Interval > 0.f && AutoPlayRuns == 0 && AutoPlayShotIndex < AutoPlayMaxShots
-			&& Sim.Time >= Interval * AutoPlayShotIndex - Interval * AutoPlayFirstShotShare)
+		const float ShotStart = CVarAutoPlayShotStart.GetValueOnGameThread();
+		const float FirstShot = ShotStart > 0.f ? ShotStart : -Interval * AutoPlayFirstShotShare;
+		if (Interval > 0.f && AutoPlayRuns == 0 && AutoPlayShotIndex < CVarAutoPlayShotCount.GetValueOnGameThread()
+			&& Sim.Time >= FirstShot + Interval * AutoPlayShotIndex)
 		{
 			TakeShot(FString::Printf(TEXT("AutoPlay_Battle_%d"), AutoPlayShotIndex));
 			AutoPlayShotIndex++;

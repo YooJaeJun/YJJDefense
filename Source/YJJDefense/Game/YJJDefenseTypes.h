@@ -276,3 +276,11 @@ struct FYJJSoundDef
 	FString Sound;
 	float Volume = 1.f;
 };
+
+// 그림 동작 하나 (Anims.csv)
+struct FYJJAnimDef
+{
+	int32 Frames = 0;
+	float Fps = 0.f;
+	int32 HitFrame = 0;   // 공격 동작에서 맞는 순간의 프레임
+};

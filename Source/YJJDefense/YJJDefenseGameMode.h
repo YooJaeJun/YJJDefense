@@ -98,5 +98,7 @@ private:
 	static TAutoConsoleVariable<int32> CVarAutoPlayExit;
 	static TAutoConsoleVariable<int32> CVarAutoPlayMap;
 	static TAutoConsoleVariable<float> CVarAutoPlayShotInterval;
+	static TAutoConsoleVariable<float> CVarAutoPlayShotStart;
+	static TAutoConsoleVariable<int32> CVarAutoPlayShotCount;
 	static TAutoConsoleVariable<int32> CVarUITest;
 };

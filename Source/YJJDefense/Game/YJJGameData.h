@@ -19,6 +19,7 @@ class UScriptStruct;
  *   Maps.csv        지도 이름·미리보기                   MapGeometry.csv 지도 모양 (Tools/Art/map_data.py가 생성)
  *   Waves.csv       지도별 웨이브                        Unlocks.csv    수집 트랙
  *   StartDisks.csv  첫 판 디스크                         BotBuildOrder.csv, Sounds.csv
+ *   Anims.csv       자세히 움직이는 그림 동작 (프레임 수·속도·타격 프레임)
  * 글자는 Localization.csv (YJJLoc).
  */
 class YJJDEFENSE_API FYJJGameDatabase
@@ -41,6 +42,7 @@ public:
 	EYJJRune StartDisks[YJJ::NumDisks][YJJ::NumSockets];
 	TArray<EYJJTower> BotBuildPattern;
 	TMap<FName, FYJJSoundDef> Sounds;
+	TMap<FName, FYJJAnimDef> Anims;
 	EYJJReaction PairReactions[static_cast<int32>(EYJJElement::Count)][static_cast<int32>(EYJJElement::Count)];
 	int32 ActiveMap = 0;
 
@@ -66,6 +68,7 @@ private:
 	void LoadStartDisks();
 	void LoadBot();
 	void LoadSounds();
+	void LoadAnims();
 	void Validate();
 
 	static FString DataPath(const TCHAR* File);
@@ -102,6 +105,8 @@ namespace YJJData
 	YJJDEFENSE_API TConstArrayView<EYJJTower> BotBuildPattern();
 	/** Sounds.csv 행. 없으면 nullptr */
 	YJJDEFENSE_API const FYJJSoundDef* Sound(FName Key);
+	/** Anims.csv 행 (Soldier_Walk, Enemy_Imp_Attack …). 없으면 nullptr */
+	YJJDEFENSE_API const FYJJAnimDef* Anim(FName Key);
 
 	/** 몬스터 특수 능력을 짧은 말로 ("갑옷, 쪼개짐"…). 없으면 빈 문자열 */
 	YJJDEFENSE_API FString EnemyTraits(EYJJEnemy Enemy);

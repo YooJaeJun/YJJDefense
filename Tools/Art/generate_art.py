@@ -22,6 +22,8 @@ from units_hd import make_imp, make_soldier, make_tower_archer, make_tower_barra
 from fx_hd import (make_arrow, make_ball, make_bomb, make_build_spot, make_burst, make_flame_fx, make_ice_block,  # noqa: E402
                    make_magic_bolt, make_puff, make_star_fx)
 from maps_hd import make_map  # noqa: E402
+from ui_hd import make_disk, make_icon, make_panel, make_panel_flat, make_rune, make_socket  # noqa: E402
+from anim_hd import build_anims  # noqa: E402
 from towers_hd import make_tower_bombard, make_tower_mage, make_tower_shrine, make_wizard  # noqa: E402
 from monsters_hd import (make_chicken, make_coco_kid, make_coconut, make_crab, make_jellyfish, make_king_crab,  # noqa: E402
                          make_mushroom, make_penguin, make_potato, make_pudding_king, make_snowball, make_snowman,
@@ -30,7 +32,6 @@ from monsters_hd import (make_chicken, make_coco_kid, make_coconut, make_crab, m
 SS = 4
 INK = (36, 30, 40, 255)
 WHITE = (255, 255, 255, 255)
-SHADE = (226, 224, 234, 255)
 
 
 def rgba(value, alpha=255):
@@ -38,17 +39,7 @@ def rgba(value, alpha=255):
     return (int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16), alpha)
 
 
-RED = rgba("ff5a4f")
-ORANGE = rgba("ff8a3c")
 YELLOW = rgba("ffd84a")
-GREEN = rgba("7fd35a")
-MINT = rgba("5fdcb4")
-SKY = rgba("7fd6ff")
-BLUE = rgba("4f8dff")
-PURPLE = rgba("9a78ff")
-TAN = rgba("ecca8c")
-BROWN = rgba("a8703c")
-GRAY = rgba("b8bfca")
 
 
 class Art:
@@ -145,7 +136,7 @@ class Art:
 
 
 # ---------------------------------------------------------------------------------------------
-# 캐릭터·타워(units_hd, towers_hd, monsters_hd), 지도(maps_hd), 건설 자리·투사체·이펙트(fx_hd)는 명암 톤. 여기는 링·빛 같은 기본 도형과 룬·UI
+# 캐릭터·타워(units_hd, towers_hd, monsters_hd), 지도(maps_hd), 건설 자리·투사체·이펙트(fx_hd), 룬·UI(ui_hd)는 명암 톤, 자세히 움직이는 동작은 anim_hd. 여기는 링·빛 같은 기본 도형
 
 # ---------------------------------------------------------------------------------------------
 # 링·빛·그림자 (흰색으로 만들고 게임에서 색을 입힌다)
@@ -183,150 +174,6 @@ def make_shadow():
     out = Image.new("RGBA", size, (20, 30, 20, 0))
     out.putalpha(img)
     return out
-
-
-# ---------------------------------------------------------------------------------------------
-# 룬 아이콘
-
-def make_rune(kind):
-    a = Art(96, 96)
-    a.rrect(5, 5, 91, 91, 22, fill=WHITE, lw=6)
-    a.rrect(11, 60, 85, 85, 16, fill=SHADE, outline=None)
-    a.rrect(11, 11, 85, 78, 16, fill=WHITE, outline=None)
-    if kind == "Fire":
-        a.poly([(48, 14), (62, 34), (72, 52), (64, 72), (48, 80), (32, 72), (24, 52), (33, 38), (39, 46)], fill=ORANGE, lw=4)
-        a.ellipse(48, 62, 11, 13, fill=YELLOW, outline=None)
-    elif kind == "Ice":
-        for angle in (0, 60, 120):
-            dx, dy = 30 * math.cos(math.radians(angle)), 30 * math.sin(math.radians(angle))
-            a.line([(48 - dx, 48 - dy), (48 + dx, 48 + dy)], color=INK, lw=11)
-        for angle in (0, 60, 120):
-            dx, dy = 30 * math.cos(math.radians(angle)), 30 * math.sin(math.radians(angle))
-            a.line([(48 - dx, 48 - dy), (48 + dx, 48 + dy)], color=SKY, lw=5)
-        a.dot(48, 48, 6, WHITE)
-    elif kind == "Water":
-        a.poly([(48, 12), (66, 42), (70, 58), (62, 74), (48, 80), (34, 74), (26, 58), (30, 42)], fill=BLUE, lw=4)
-        a.dot(39, 54, 5, rgba("bcd6ff"))
-    elif kind == "Lightning":
-        a.poly([(56, 10), (26, 52), (44, 52), (36, 86), (70, 40), (52, 40)], fill=YELLOW, lw=4)
-    elif kind == "Poison":
-        a.ellipse(48, 46, 24, 24, fill=GREEN, lw=4)
-        a.eyes(48, 42, gap=9, r=4.5)
-        a.rrect(38, 62, 58, 78, 4, fill=GREEN, lw=4)
-        a.line([(48, 64), (48, 76)], lw=2.5, cap=False)
-    elif kind == "Wind":
-        a.arc(42, 40, 20, 14, 150, 400, color=INK, lw=10)
-        a.arc(42, 40, 20, 14, 150, 400, color=MINT, lw=5)
-        a.line([(20, 62), (70, 62)], color=INK, lw=10)
-        a.line([(20, 62), (70, 62)], color=MINT, lw=5)
-        a.line([(34, 76), (60, 76)], color=INK, lw=10)
-        a.line([(34, 76), (60, 76)], color=MINT, lw=5)
-    elif kind == "Explosion":
-        a.star(48, 48, 36, 19, 9, fill=RED, lw=4)
-        a.star(48, 48, 19, 10, 9, fill=YELLOW, outline=None)
-    elif kind == "Chain":
-        a.ellipse(36, 40, 18, 13, fill=None, outline=INK, lw=11)
-        a.ellipse(36, 40, 15.5, 10.5, fill=None, outline=PURPLE, lw=6)
-        a.ellipse(60, 58, 18, 13, fill=None, outline=INK, lw=11)
-        a.ellipse(60, 58, 15.5, 10.5, fill=None, outline=PURPLE, lw=6)
-    elif kind == "Split":
-        for dx, dy in ((-24, -22), (0, -30), (24, -22)):
-            a.line([(48, 76), (48 + dx, 76 + dy * 1.6)], color=INK, lw=10)
-        for dx, dy in ((-24, -22), (0, -30), (24, -22)):
-            a.line([(48, 76), (48 + dx, 76 + dy * 1.6)], color=ORANGE, lw=5)
-            a.dot(48 + dx, 76 + dy * 1.6, 7, ORANGE)
-    return a.result()
-
-
-# ---------------------------------------------------------------------------------------------
-# UI
-
-def make_panel():
-    a = Art(64, 64)
-    a.rrect(3, 3, 61, 61, 18, fill=INK, outline=None)
-    a.rrect(8, 8, 56, 58, 13, fill=SHADE, outline=None)
-    a.rrect(8, 8, 56, 52, 13, fill=WHITE, outline=None)
-    return a.result()
-
-
-def make_panel_flat():
-    a = Art(64, 64)
-    a.rrect(3, 3, 61, 61, 18, fill=WHITE, outline=None)
-    return a.result()
-
-
-def make_disk():
-    """스펠 디스크: 룬 두 개를 꽂는 원반."""
-    a = Art(240, 240)
-    a.ellipse(120, 120, 114, 114, fill=WHITE, lw=7)
-    a.ellipse(120, 120, 98, 98, fill=None, outline=SHADE, lw=5)
-    a.ellipse(120, 120, 80, 80, fill=None, outline=SHADE, lw=3)
-    for index in range(12):
-        t = 2 * math.pi * index / 12
-        a.dot(120 + 106 * math.cos(t), 120 + 106 * math.sin(t), 3.5, GRAY)
-    a.ellipse(120, 120, 16, 16, fill=SHADE, lw=5)
-    return a.result()
-
-
-def make_socket():
-    a = Art(96, 96)
-    a.rrect(5, 5, 91, 91, 22, fill=rgba("d6d2e0"), lw=6)
-    a.rrect(16, 16, 80, 80, 14, fill=rgba("c2bdd0"), outline=None)
-    a.line([(48, 36), (48, 60)], color=WHITE, lw=7)
-    a.line([(36, 48), (60, 48)], color=WHITE, lw=7)
-    return a.result()
-
-
-def make_icon(kind):
-    a = Art(64, 64)
-    if kind == "Heart":
-        a.cloud([(22, 24, 13), (42, 24, 13)], fill=RED)
-        a.poly([(8, 30), (32, 58), (56, 30)], fill=RED, lw=5)
-        a.poly([(12, 28), (32, 50), (52, 28), (32, 22)], fill=RED, outline=None)
-        a.dot(20, 20, 4, WHITE)
-    elif kind == "Coin":
-        a.ellipse(32, 32, 26, 26, fill=YELLOW)
-        a.ellipse(32, 32, 16, 16, fill=None, outline=rgba("d9a520"), lw=4)
-        a.dot(24, 22, 4, WHITE)
-    elif kind == "Flag":
-        a.line([(18, 58), (18, 8)], lw=6)
-        a.poly([(18, 8), (54, 20), (18, 34)], fill=RED)
-    elif kind == "Lock":
-        a.ellipse(32, 24, 14, 16, fill=None, outline=INK, lw=7)
-        a.rrect(12, 26, 52, 58, 8, fill=GRAY)
-        a.dot(32, 40, 5)
-        a.line([(32, 40), (32, 50)], lw=4)
-    elif kind in ("Star", "StarEmpty"):
-        a.star(32, 34, 28, 13, 5, fill=YELLOW if kind == "Star" else rgba("d6d2e0"))
-    elif kind == "Up":
-        a.poly([(32, 6), (58, 34), (42, 34), (42, 58), (22, 58), (22, 34), (6, 34)], fill=GREEN)
-    elif kind == "Sell":
-        a.poly([(20, 18), (44, 18), (56, 44), (48, 58), (16, 58), (8, 44)], fill=TAN)
-        a.line([(22, 18), (42, 18)], lw=7)
-        a.dot(32, 40, 9, YELLOW)
-    elif kind == "Pause":
-        a.rrect(14, 10, 28, 54, 5, fill=WHITE)
-        a.rrect(36, 10, 50, 54, 5, fill=WHITE)
-    elif kind == "Play":
-        a.poly([(16, 8), (54, 32), (16, 56)], fill=WHITE)
-    elif kind == "Fast":
-        a.poly([(6, 10), (32, 32), (6, 54)], fill=WHITE)
-        a.poly([(32, 10), (58, 32), (32, 54)], fill=WHITE)
-    elif kind == "Cycle":
-        a.arc(32, 32, 20, 20, 30, 300, lw=7)
-        a.poly([(44, 4), (58, 20), (38, 24)], fill=INK, lw=3)
-    elif kind == "Wand":
-        a.line([(14, 54), (40, 24)], color=INK, lw=10)
-        a.line([(14, 54), (40, 24)], color=BROWN, lw=5)
-        a.star(44, 18, 16, 7, 5, fill=YELLOW, lw=4)
-    elif kind == "Check":
-        a.line([(12, 34), (26, 48), (52, 16)], color=INK, lw=13)
-        a.line([(12, 34), (26, 48), (52, 16)], color=GREEN, lw=7)
-    elif kind == "Skull":
-        a.ellipse(32, 28, 22, 20, fill=WHITE)
-        a.rrect(22, 40, 42, 56, 5, fill=WHITE)
-        a.eyes(32, 28, gap=9, r=5)
-    return a.result()
 
 
 # ---------------------------------------------------------------------------------------------
@@ -403,6 +250,9 @@ def build_all():
     sprites["T_UI_Socket"] = make_socket()
     for kind in ("Heart", "Coin", "Flag", "Lock", "Star", "StarEmpty", "Up", "Sell", "Pause", "Play", "Fast", "Cycle", "Wand", "Check", "Skull"):
         sprites["T_UI_" + kind] = make_icon(kind)
+
+    # 자세히 움직이는 동작 (Content/YJJDefense/Data/Anims.csv)
+    sprites.update(build_anims())
     return sprites
 
 

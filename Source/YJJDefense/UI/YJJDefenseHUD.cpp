@@ -21,6 +21,10 @@ const FYJJUILayout& AYJJDefenseHUD::UI()
 	return YJJData::Layout();
 }
 
+TAutoConsoleVariable<int32> AYJJDefenseHUD::CVarAnimPreview(
+	TEXT("yjj.AnimPreview"), 0,
+	TEXT("1이면 화면 위에 자세히 움직이는 동작(Anims.csv)을 서 있기·걷기·공격으로 나란히 돌려 보여 준다"));
+
 // ---------------------------------------------------------------------------------------------
 // 준비
 
@@ -33,6 +37,60 @@ UTexture2D* AYJJDefenseHUD::LoadTex(const FString& Name)
 		LoadedTextures.Add(Texture);
 	}
 	return Texture;
+}
+
+AYJJDefenseHUD::FSpriteAnim AYJJDefenseHUD::LoadAnim(const FString& Name)
+{
+	FSpriteAnim Anim;
+	const FYJJAnimDef* Def = YJJData::Anim(FName(*Name));
+	if (!Def)
+	{
+		return Anim;
+	}
+	Anim.Fps = Def->Fps;
+	Anim.HitFrame = Def->HitFrame;
+	for (int32 Frame = 0; Frame < Def->Frames; ++Frame)
+	{
+		UTexture2D* Texture = LoadTex(FString::Printf(TEXT("T_%s_%d"), *Name, Frame));
+		if (!Texture)
+		{
+			UE_LOG(LogYJJDefense, Warning, TEXT("[HUD] %s: %d번 프레임 텍스처가 없다 (BuildArt.ps1을 다시 돌릴 것)"), *Name, Frame);
+			Anim.Frames.Reset();
+			return Anim;
+		}
+		Anim.Frames.Add(Texture);
+	}
+	return Anim;
+}
+
+AYJJDefenseHUD::FActorAnims AYJJDefenseHUD::LoadActorAnims(const FString& Prefix)
+{
+	FActorAnims Anims;
+	Anims.Idle = LoadAnim(Prefix + IdleAnimSuffix);
+	Anims.Walk = LoadAnim(Prefix + WalkAnimSuffix);
+	Anims.Attack = LoadAnim(Prefix + AttackAnimSuffix);
+	return Anims;
+}
+
+UTexture2D* AYJJDefenseHUD::FightFrame(const FActorAnims& Anims, float TimeToHit, float Interval, float Time) const
+{
+	const FSpriteAnim& Attack = Anims.Attack;
+	const int32 Hit = FMath::Clamp(Attack.HitFrame, 0, Attack.Frames.Num() - 1);
+	const float Windup = FMath::Min(UI().AttackWindup, Interval * UI().AttackWindupShare);
+	const float Recover = FMath::Min(UI().AttackRecover, Interval * UI().AttackRecoverShare);
+	if (Hit > 0 && Windup > 0.f && TimeToHit < Windup)
+	{
+		const float T = 1.f - FMath::Max(TimeToHit, 0.f) / Windup;
+		return Attack.Frames[FMath::Min(FMath::FloorToInt(T * Hit), Hit - 1)];
+	}
+	const float SinceHit = Interval - TimeToHit;
+	const int32 After = Attack.Frames.Num() - Hit;
+	if (Recover > 0.f && SinceHit < Recover)
+	{
+		const float T = FMath::Max(SinceHit, 0.f) / Recover;
+		return Attack.Frames[Hit + FMath::Min(FMath::FloorToInt(T * After), After - 1)];
+	}
+	return Anims.Idle.IsValid() ? Anims.Idle.Loop(Time) : Attack.Frames[0];
 }
 
 void AYJJDefenseHUD::BeginPlay()
@@ -69,6 +127,12 @@ void AYJJDefenseHUD::BeginPlay()
 	for (int32 Frame = 0; Frame < WizardFrames; ++Frame)
 	{
 		WizardTextures[Frame] = LoadTex(FString::Printf(TEXT("T_Wizard_%d"), Frame));
+	}
+	// 자세히 움직이는 동작 (Anims.csv에 있는 것만. 없으면 위의 예전 그림)
+	SoldierAnims = LoadActorAnims(SoldierAnimPrefix);
+	for (int32 Type = 0; Type < static_cast<int32>(EYJJEnemy::Count); ++Type)
+	{
+		EnemyAnims[Type] = LoadActorAnims(EnemyAnimPrefix + YJJData::Enemy(static_cast<EYJJEnemy>(Type)).Art);
 	}
 	for (int32 Index = 0; Index < static_cast<int32>(EYJJRune::Count); ++Index)
 	{
@@ -166,6 +230,7 @@ void AYJJDefenseHUD::DrawHUD()
 		break;
 	}
 
+	DrawAnimPreview();
 	DrawTooltip();
 
 	// 화면비가 16:9가 아니면 남는 자리를 가린다
